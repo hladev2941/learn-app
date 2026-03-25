@@ -3,11 +3,12 @@ FROM maven:3.9-eclipse-temurin-17-alpine AS build
 WORKDIR /app
 
 COPY pom.xml .
-COPY discovery-server/pom.xml  ./discovery-server/pom.xml
-COPY api-gateway/pom.xml       ./api-gateway/pom.xml
-COPY auth-service/pom.xml      ./auth-service/pom.xml
-COPY study-service/pom.xml     ./study-service/pom.xml
-COPY flashcard-service/pom.xml ./flashcard-service/pom.xml
+COPY discovery-server/pom.xml    ./discovery-server/pom.xml
+COPY api-gateway/pom.xml         ./api-gateway/pom.xml
+COPY auth-service/pom.xml        ./auth-service/pom.xml
+COPY study-service/pom.xml       ./study-service/pom.xml
+COPY flashcard-service/pom.xml   ./flashcard-service/pom.xml
+COPY notification-service/pom.xml ./notification-service/pom.xml
 
 RUN mvn dependency:go-offline -pl flashcard-service -am -B
 

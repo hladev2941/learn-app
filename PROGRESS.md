@@ -1,6 +1,6 @@
 # LearnApp — Ghi chú tiến độ
 
-> Cập nhật lần cuối: 2026-03-25
+> Cập nhật lần cuối: 2026-03-25 (session 5)
 
 ---
 
@@ -12,7 +12,12 @@
 | Database / Redis | ✅ Healthy |
 | Frontend Angular | ✅ Dev server đang chạy |
 | Auth flow (register/login) | ✅ Hoạt động end-to-end |
-| Các feature pages | 🚧 Placeholder — chưa implement |
+| Subject (Môn học) | ✅ Backend + Frontend hoàn chỉnh |
+| Deck + Card feature | ✅ Backend + Frontend hoàn chỉnh |
+| Notification per Subject | ✅ Config lưu DB, scheduler Phase 2 |
+| WebSocket Notification | ✅ STOMP/SockJS, OnlineRegistry, SubjectReminder + StreakWarning scheduler |
+| Notification Top Bar   | ✅ Ticker cuộn ngang + Bell icon/badge + Panel list có navigate |
+| Các feature pages khác | 🚧 Placeholder — chưa implement |
 
 ---
 
@@ -48,6 +53,7 @@ npx ng serve --configuration=development
 | `learn-auth` | 8081 | Auth service (register/login/JWT) |
 | `learn-study` | 8082 | Study service (streak, session) |
 | `learn-flashcard` | 8083 | Flashcard service (deck, card, FSRS) |
+| `learn-notification` | 8084 | Notification service (WebSocket/STOMP, schedulers) |
 | `learn-postgres` | 5432 | PostgreSQL 15 |
 | `learn-redis` | 6379 | Redis 7 |
 | `learn-pgadmin` | 5050 | PgAdmin UI |
@@ -64,6 +70,9 @@ npx ng serve --configuration=development
 POST /api/v1/auth/**        → learn-auth:8081
 GET  /api/v1/users/**       → learn-auth:8081
 /api/v1/study/**            → learn-study:8082
+/api/v1/notifications/**    → learn-notification:8084
+/api/v1/subjects/**         → learn-flashcard:8083  ← MỚI
+/ws/**                      → learn-notification:8084
 /api/v1/decks/**            → learn-flashcard:8083
 /api/v1/cards/**            → learn-flashcard:8083
 /api/v1/reviews/**          → learn-flashcard:8083
@@ -106,7 +115,8 @@ src/app/
 │   ├── auth/login.component.ts     ✅ Hoàn chỉnh
 │   ├── auth/register.component.ts  ✅ Hoàn chỉnh
 │   ├── dashboard/                  ✅ UI done, data chưa connect API
-│   ├── deck/                       🚧 Placeholder
+│   ├── deck/                       ✅ Hoàn chỉnh (Subject→Deck→Card + reminder config)
+│   ├── layout/main-layout          ✅ Top bar: ticker cuộn + bell badge + notification panel
 │   ├── timer/                      🚧 Placeholder
 │   ├── review/                     🚧 Placeholder
 │   ├── analytics/                  🚧 Placeholder
@@ -146,17 +156,40 @@ src/app/
 
 ## TODO — Việc cần làm tiếp
 
+### ⚠️ Cần rebuild Docker sau thay đổi này
+```bash
+# Schema DB đã đổi (thêm bảng subjects, cột subject_id) → cần reset volume
+DOCKER_BUILDKIT=0 docker compose down -v
+DOCKER_BUILDKIT=0 docker compose build
+docker compose up -d
+```
+
 ### Backend
-- [ ] `CardController` — CRUD cho card trong deck
+- [x] `SubjectController` — CRUD môn học + reminder config ✅
+- [x] `CardController` — CRUD cho card trong deck ✅
 - [ ] AI service trong `flashcard-service` — generate card từ Claude API (WebClient)
 - [ ] `StudySessionController` — bắt đầu/kết thúc session học
 - [ ] FSRS algorithm implementation — schedule review
 - [ ] `StreakResetScheduler` — reset streak hàng ngày (đã có scheduler stub)
 - [ ] Internal Feign endpoints — `/internal/users/{id}` cho cross-service calls
+- [ ] `InternalSubjectController` — GET `/internal/subjects/due-reminders` cho scheduler gọi
+
+**Phase 2 — Notification System (WebSocket + Web Push):**
+- [ ] `WebSocketConfig.java` — STOMP config, SockJS endpoint `/ws`
+- [ ] `WebSocketAuthInterceptor.java` — validate JWT qua ChannelInterceptor
+- [ ] `OnlineUserRegistry.java` — Redis Set track user đang kết nối
+- [ ] `SubjectReminderScheduler.java` — cron mỗi phút check subject reminders
+- [ ] `StreakWarningScheduler.java` — cron 20:00 check streak chưa học
+- [ ] `WebPushService.java` — gửi OS notification qua java-webpush
+- [ ] `PushSubscriptionController.java` — POST `/api/v1/push/subscribe`
+- [ ] api-gateway route `/ws/**` → study-service (WebSocket proxy)
+- [ ] Angular `NotificationService` — STOMP client, connect/disconnect theo login
+- [ ] Angular `NotificationBellComponent` — icon chuông + badge unread
+- [ ] Angular `NotificationToastComponent` — toast pop-up tự động tắt
+- [ ] Angular Service Worker config (`ngsw-config.json`) + Web Push permission
 
 ### Frontend
-- [ ] **Deck page** — list decks, create deck, edit/delete
-- [ ] **Card page** — list cards trong deck, create/edit card, AI generate
+- [x] **Deck page** — Subject (môn học) → Deck → Card, 2-level nav, reminder config ✅
 - [ ] **Review page** — flip card UI, FSRS rating buttons (Again/Hard/Good/Easy)
 - [ ] **Timer page** — Pomodoro timer (25/5 phút), tích hợp study session
 - [ ] **Analytics page** — charts: streak calendar, XP over time, cards reviewed

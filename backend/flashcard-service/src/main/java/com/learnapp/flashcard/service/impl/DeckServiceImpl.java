@@ -3,8 +3,10 @@ package com.learnapp.flashcard.service.impl;
 import com.learnapp.flashcard.dto.CreateDeckRequest;
 import com.learnapp.flashcard.dto.DeckResponse;
 import com.learnapp.flashcard.entity.Deck;
+import com.learnapp.flashcard.entity.Subject;
 import com.learnapp.flashcard.exception.AppException;
 import com.learnapp.flashcard.repository.DeckRepository;
+import com.learnapp.flashcard.repository.SubjectRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -18,16 +20,28 @@ import java.util.UUID;
 public class DeckServiceImpl {
 
     private final DeckRepository deckRepository;
+    private final SubjectRepository subjectRepository;
 
     public List<DeckResponse> getUserDecks(UUID userId) {
         return deckRepository.findByUserIdOrderByUpdatedAtDesc(userId)
                 .stream().map(DeckResponse::from).toList();
     }
 
+    public List<DeckResponse> getDecksBySubject(UUID subjectId, UUID userId) {
+        return deckRepository.findBySubject_IdAndUserIdOrderByUpdatedAtDesc(subjectId, userId)
+                .stream().map(DeckResponse::from).toList();
+    }
+
     @Transactional
     public DeckResponse createDeck(UUID userId, CreateDeckRequest request) {
+        Subject subject = null;
+        if (request.subjectId() != null) {
+            subject = subjectRepository.findByIdAndUserId(request.subjectId(), userId)
+                    .orElseThrow(() -> new AppException("Subject not found", HttpStatus.NOT_FOUND));
+        }
         Deck deck = Deck.builder()
                 .userId(userId)
+                .subject(subject)
                 .name(request.name())
                 .description(request.description())
                 .coverColor(request.coverColor() != null ? request.coverColor() : "#6366f1")

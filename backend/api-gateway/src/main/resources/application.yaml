@@ -36,11 +36,25 @@ spring:
           filters:
             - name: JwtAuthenticationFilter
 
+        # ── notification-service ──────────────────────────
+        - id: notifications
+          uri: ${NOTIFICATION_SERVICE_URL:http://learn-notification:8084}
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - name: JwtAuthenticationFilter
+
+        # ── WebSocket/STOMP — auth inside STOMP interceptor ───
+        - id: websocket-notification
+          uri: ${NOTIFICATION_SERVICE_URL:http://learn-notification:8084}
+          predicates:
+            - Path=/ws/**
+
         # ── flashcard-service ─────────────────────────
         - id: flashcard-service
           uri: ${FLASHCARD_SERVICE_URL:http://learn-flashcard:8083}
           predicates:
-            - Path=/api/v1/decks/**, /api/v1/cards/**, /api/v1/reviews/**, /api/v1/ai/**
+            - Path=/api/v1/subjects/**, /api/v1/decks/**, /api/v1/cards/**, /api/v1/reviews/**, /api/v1/ai/**
           filters:
             - name: JwtAuthenticationFilter
 

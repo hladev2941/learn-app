@@ -15,7 +15,7 @@ import java.util.UUID;
  * NOT routed through api-gateway.
  */
 @RestController
-@RequestMapping("/internal/reviews")
+@RequestMapping("/internal/reviews") // Called by study-service Feign at /internal/reviews/stats/{userId}
 @RequiredArgsConstructor
 public class InternalReviewController {
 

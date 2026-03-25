@@ -8,6 +8,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Instant;
 import java.util.UUID;
 
+
 @Entity
 @Table(name = "decks")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -19,6 +20,10 @@ public class Deck {
 
     @Column(name = "user_id", nullable = false)
     private UUID userId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "subject_id")
+    private Subject subject;
 
     @Column(nullable = false)
     private String name;

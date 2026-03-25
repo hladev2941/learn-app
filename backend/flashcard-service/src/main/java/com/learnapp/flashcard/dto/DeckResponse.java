@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record DeckResponse(
         UUID id,
+        UUID subjectId,
         String name,
         String description,
         String coverColor,
@@ -15,7 +16,8 @@ public record DeckResponse(
         Instant updatedAt
 ) {
     public static DeckResponse from(Deck deck) {
-        return new DeckResponse(deck.getId(), deck.getName(), deck.getDescription(),
+        UUID subjectId = deck.getSubject() != null ? deck.getSubject().getId() : null;
+        return new DeckResponse(deck.getId(), subjectId, deck.getName(), deck.getDescription(),
                 deck.getCoverColor(), deck.getCardCount(), deck.getCreatedAt(), deck.getUpdatedAt());
     }
 }

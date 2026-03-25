@@ -11,5 +11,7 @@ import java.util.UUID;
 @Repository
 public interface DeckRepository extends JpaRepository<Deck, UUID> {
     List<Deck> findByUserIdOrderByUpdatedAtDesc(UUID userId);
+    List<Deck> findBySubject_IdAndUserIdOrderByUpdatedAtDesc(UUID subjectId, UUID userId);
     Optional<Deck> findByIdAndUserId(UUID id, UUID userId);
+    int countBySubject_IdAndUserId(UUID subjectId, UUID userId);
 }

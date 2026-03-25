@@ -1,5 +1,23 @@
+export type ReminderType = 'MINUTES' | 'HOURS' | 'DAILY' | 'WEEKLY';
+
+export interface Subject {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  reminderEnabled: boolean;
+  reminderType: ReminderType | null;
+  reminderInterval: number | null;
+  reminderTime: string | null;
+  reminderDays: string[];
+  deckCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Deck {
   id: string;
+  subjectId: string | null;
   name: string;
   description: string | null;
   coverColor: string;
@@ -18,6 +36,9 @@ export interface Card {
   nextReviewDate: string | null;
   lastReviewDate: string | null;
   fsrsState: number;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ReviewRequest {

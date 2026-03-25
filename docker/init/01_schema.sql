@@ -1,6 +1,6 @@
 -- =====================================================
 -- Learn App — Database Schema (Microservices version)
--- PostgreSQL 15 — 3 schemas: auth / study / flashcard
+-- PostgreSQL 15 — 4 schemas: auth / study / flashcard / notification
 -- =====================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -12,11 +12,13 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS study;
 CREATE SCHEMA IF NOT EXISTS flashcard;
+CREATE SCHEMA IF NOT EXISTS notification;
 
 -- Grant full access to app user
-GRANT ALL ON SCHEMA auth      TO learn_user;
-GRANT ALL ON SCHEMA study     TO learn_user;
-GRANT ALL ON SCHEMA flashcard TO learn_user;
+GRANT ALL ON SCHEMA auth         TO learn_user;
+GRANT ALL ON SCHEMA study        TO learn_user;
+GRANT ALL ON SCHEMA flashcard    TO learn_user;
+GRANT ALL ON SCHEMA notification TO learn_user;
 
 -- =====================================================
 -- SCHEMA: auth  (owned by auth-service)
@@ -160,9 +162,28 @@ CREATE TABLE study.proof_of_study (
 -- SCHEMA: flashcard  (owned by flashcard-service)
 -- =====================================================
 
+-- Subjects (môn học / thư mục) — parent of decks
+CREATE TABLE flashcard.subjects (
+    id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id          UUID NOT NULL,
+    name             VARCHAR(200) NOT NULL,
+    emoji            VARCHAR(10)  NOT NULL DEFAULT '📚',
+    color            VARCHAR(7)   NOT NULL DEFAULT '#6366f1',
+    reminder_enabled  BOOLEAN NOT NULL DEFAULT FALSE,
+    reminder_type     VARCHAR(20),            -- "MINUTES" | "HOURS" | "DAILY" | "WEEKLY"
+    reminder_interval INTEGER,               -- for MINUTES/HOURS: interval value
+    reminder_time     TIME,                  -- for DAILY/WEEKLY: e.g. 20:00
+    reminder_days     VARCHAR(50),           -- for WEEKLY: "MON,WED,FRI"
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_flashcard_subjects_user ON flashcard.subjects(user_id);
+
 CREATE TABLE flashcard.decks (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id     UUID NOT NULL,
+    subject_id  UUID REFERENCES flashcard.subjects(id) ON DELETE SET NULL,
     name        VARCHAR(200) NOT NULL,
     description TEXT,
     cover_color VARCHAR(7) DEFAULT '#6366f1',
@@ -171,7 +192,8 @@ CREATE TABLE flashcard.decks (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_flashcard_decks_user ON flashcard.decks(user_id);
+CREATE INDEX idx_flashcard_decks_user    ON flashcard.decks(user_id);
+CREATE INDEX idx_flashcard_decks_subject ON flashcard.decks(subject_id);
 
 CREATE TABLE flashcard.tags (
     id      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -243,3 +265,21 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_card_count_sync
     AFTER INSERT OR DELETE ON flashcard.cards
     FOR EACH ROW EXECUTE FUNCTION flashcard.sync_deck_card_count();
+
+-- =====================================================
+-- SCHEMA: notification  (owned by notification-service)
+-- =====================================================
+
+CREATE TABLE notification.notification_logs (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID        NOT NULL,
+    type            VARCHAR(50) NOT NULL,
+    title           VARCHAR(200) NOT NULL,
+    message         TEXT,
+    reference_id    UUID,
+    sent_via        VARCHAR(20) NOT NULL DEFAULT 'WS',
+    is_read         BOOLEAN     NOT NULL DEFAULT FALSE,
+    sent_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_notif_logs_user ON notification.notification_logs(user_id, sent_at DESC);

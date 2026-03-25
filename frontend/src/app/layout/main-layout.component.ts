@@ -1,7 +1,10 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../core/services/auth.service';
+import { NotificationService } from '../core/services/notification.service';
+import { NotificationBellComponent } from '../shared/components/notification-bell.component';
+import { NotificationToastComponent } from '../shared/components/notification-toast.component';
 
 interface NavItem {
   label: string;
@@ -13,7 +16,8 @@ interface NavItem {
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule,
+            NotificationBellComponent, NotificationToastComponent],
   template: `
     <!-- Mobile header -->
     <header class="mobile-header">
@@ -24,6 +28,7 @@ interface NavItem {
         <div class="brand-mark-sm"><mat-icon>school</mat-icon></div>
         <span>LearnApp</span>
       </div>
+      <div class="mobile-bell"><app-notification-bell /></div>
     </header>
 
     @if (mobileOpen()) {
@@ -78,9 +83,32 @@ interface NavItem {
       </aside>
 
       <main class="main-content">
+        <!-- Notification top bar -->
+        <div class="top-bar">
+
+          <!-- Ticker: scrolling notification text -->
+          <div class="ticker-wrap">
+            <div class="ticker-label">
+              <mat-icon class="ticker-icon">campaign</mat-icon>
+              <span>Thông báo</span>
+            </div>
+            <div class="ticker-track">
+              <span class="ticker-text" [style.animation-duration]="tickerDuration()">
+                {{ tickerText() }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Notification bell with badge -->
+          <app-notification-bell />
+        </div>
+
         <router-outlet />
       </main>
     </div>
+
+    <!-- Global toast overlay -->
+    <app-notification-toast />
   `,
   styles: [`
     *, *::before, *::after { box-sizing: border-box; }
@@ -288,7 +316,55 @@ interface NavItem {
     .main-content {
       flex: 1; min-width: 0;
       overflow-y: auto; overflow-x: hidden;
+      display: flex; flex-direction: column;
     }
+
+    /* ── Top bar ── */
+    .top-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 16px;
+      height: 48px; flex-shrink: 0;
+      background: rgba(255,255,255,0.72);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(199,210,254,0.45);
+      position: sticky; top: 0; z-index: 10;
+      box-shadow: 0 1px 8px rgba(99,102,241,0.06);
+    }
+
+    /* ── Ticker ── */
+    .ticker-wrap {
+      flex: 1; display: flex; align-items: center; gap: 0;
+      overflow: hidden; min-width: 0;
+    }
+    .ticker-label {
+      display: flex; align-items: center; gap: 5px;
+      flex-shrink: 0;
+      padding: 0 10px 0 4px;
+      border-right: 1px solid rgba(199,210,254,0.6);
+      margin-right: 10px;
+      color: #6366f1; font-size: 0.75rem; font-weight: 600;
+      white-space: nowrap;
+    }
+    .ticker-icon { font-size: 15px; width: 15px; height: 15px; }
+    .ticker-track {
+      flex: 1; overflow: hidden;
+      position: relative;
+    }
+    .ticker-text {
+      display: inline-block;
+      white-space: nowrap;
+      font-size: 0.8rem; color: #4b5563; font-weight: 400;
+      animation: ticker-scroll linear infinite;
+      will-change: transform;
+    }
+    @keyframes ticker-scroll {
+      0%   { transform: translateX(60vw); }
+      100% { transform: translateX(-100%); }
+    }
+
+    /* ── Mobile bell ── */
+    .mobile-bell { margin-left: auto; }
 
     /* ── Mobile ── */
     @media (max-width: 767px) {
@@ -311,10 +387,48 @@ interface NavItem {
     }
   `],
 })
-export class MainLayoutComponent {
+export class MainLayoutComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
+  private notificationService = inject(NotificationService);
+
   user = this.authService.currentUser;
   mobileOpen = signal(false);
+
+  /** Text shown in the ticker — join latest 5 notification titles */
+  tickerText = computed(() => {
+    const list = this.notificationService.notifications();
+    if (list.length === 0) {
+      return 'Chào mừng bạn đến với LearnApp! ✨ · Học đều mỗi ngày để duy trì streak 🔥 · Tạo flashcard để ôn tập hiệu quả 📚';
+    }
+    return list
+      .slice(0, 5)
+      .map(n => `${this.getTickerIcon(n.type)} ${n.title}`)
+      .join('   ·   ');
+  });
+
+  /** Duration scales with text length so scroll speed stays constant */
+  tickerDuration = computed(() => {
+    const len = this.tickerText().length;
+    return `${Math.max(15, len * 0.22)}s`;
+  });
+
+  private getTickerIcon(type: string): string {
+    const map: Record<string, string> = { SUBJECT_REMINDER: '📚', STREAK_WARNING: '🔥', REVIEW_DUE: '🃏' };
+    return map[type] ?? '🔔';
+  }
+
+  ngOnInit(): void {
+    // Connect WebSocket when the layout (authenticated shell) is loaded
+    try {
+      this.notificationService.connect();
+    } catch (e) {
+      console.warn('[Layout] WS connect failed', e);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.notificationService.disconnect();
+  }
 
   navItems: NavItem[] = [
     { label: 'Dashboard',  icon: 'dashboard',  route: '/dashboard', color: 'linear-gradient(135deg,#6366f1,#818cf8)' },

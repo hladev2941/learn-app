@@ -73,19 +73,42 @@
 
 ### 1.4 Flashcard System
 
+> **Cấu trúc phân cấp:** Subject (Môn học) → Deck (Bộ thẻ) → Card (Thẻ)
+
+#### Hierarchy
+```
+Subject "Tiếng Anh"        ← môn học / thư mục, có reminder config
+  └─ Deck "Unit 1 — Greetings"   ← bộ thẻ, có màu sắc
+       └─ Card "Hello / Xin chào"       ← thẻ, có FSRS state + tags
+```
+
 | # | Chức năng | Mô tả chi tiết | Công nghệ | Độ ưu tiên |
 |---|-----------|----------------|-----------|------------|
-| 1.4.1 | Tạo flashcard (text) | Form tạo thẻ: mặt trước / mặt sau (text) | Angular Reactive Forms + Spring REST | 🔴 Bắt buộc |
-| 1.4.2 | Tạo flashcard (có ảnh) | Upload ảnh cho mặt trước hoặc mặt sau | Cloudinary Java SDK + Angular file upload | 🟡 Quan trọng |
-| 1.4.3 | Phân loại theo chủ đề (Deck) | Tạo, đặt tên, xoá Deck chứa các thẻ | Spring JPA entity `Deck` + `Card` | 🔴 Bắt buộc |
-| 1.4.4 | Gắn tag cho thẻ | Gắn nhiều tag tự do vào thẻ | JPA `@ManyToMany` giữa `Card` và `Tag` | 🟡 Quan trọng |
-| 1.4.5 | Lật thẻ (flip animation) | Click thẻ → lật xem đáp án | Angular Animations + CSS 3D transform | 🔴 Bắt buộc |
-| 1.4.6 | Học theo chế độ Random | Hiện ngẫu nhiên các thẻ trong deck | `Collections.shuffle()` phía Spring hoặc Angular | 🔴 Bắt buộc |
-| 1.4.7 | Sửa / Xoá thẻ | CRUD đầy đủ | Spring REST API (PUT, DELETE) | 🔴 Bắt buộc |
+| 1.4.0 | Subject (Môn học) | Tạo, đặt tên, chọn emoji, màu, cấu hình reminder | Spring `Subject` entity + `SubjectController` | 🔴 Bắt buộc |
+| 1.4.1 | Nhắc học theo môn | Bật/tắt, chọn giờ và ngày trong tuần cho từng môn | Config lưu DB → scheduler Phase 2 gửi push | 🟡 Quan trọng |
+| 1.4.2 | Deck trong môn học | Tạo bộ thẻ thuộc 1 môn, có màu sắc | Spring `Deck` entity + `DeckController` | 🔴 Bắt buộc |
+| 1.4.3 | Tạo flashcard (text) | Form tạo thẻ: mặt trước / mặt sau (text) | Angular Forms + Spring REST | 🔴 Bắt buộc |
+| 1.4.4 | Tạo flashcard (có ảnh) | Upload ảnh cho mặt trước hoặc mặt sau | Cloudinary Java SDK + Angular file upload | 🟡 Quan trọng |
+| 1.4.5 | Gắn tag cho thẻ | Gắn nhiều tag tự do vào thẻ | JPA `@ManyToMany` giữa `Card` và `Tag` | 🟡 Quan trọng |
+| 1.4.6 | Lật thẻ (flip animation) | Click thẻ → lật xem đáp án | Angular Animations + CSS 3D transform | 🔴 Bắt buộc |
+| 1.4.7 | Học theo chế độ Random | Hiện ngẫu nhiên các thẻ trong deck | `Collections.shuffle()` phía Spring hoặc Angular | 🔴 Bắt buộc |
+| 1.4.8 | Sửa / Xoá thẻ | CRUD đầy đủ | Spring REST API (PATCH, DELETE) | 🔴 Bắt buộc |
 
-**Backend:** `CardController`, `DeckController`, `CardService`, `DeckService`, `TagRepository`
-**Frontend:** `DeckListComponent`, `CardEditorComponent`, `FlashcardStudyComponent`
-**DoD:** User tạo deck, thêm thẻ, học theo chế độ random không lỗi, flip animation mượt.
+#### Notification config per Subject
+```
+Subject {
+  reminderEnabled: boolean       // bật/tắt
+  reminderTime: TIME             // "20:00" — giờ nhắc
+  reminderDays: "MON,WED,FRI"   // ngày trong tuần
+}
+```
+> Scheduler thực tế (Web Push) triển khai ở Phase 2 (mục 2.5).
+> Phase 1 chỉ lưu config và hiển thị reminder badge trên UI.
+
+**Backend:** `SubjectController`, `DeckController`, `CardController`, `SubjectServiceImpl`, `DeckServiceImpl`, `CardServiceImpl`
+**Frontend:** `DeckComponent` (Subject→Deck→Card navigation), `DeckService`
+**DB schema:** `flashcard.subjects` + `flashcard.decks` (có `subject_id` FK) + `flashcard.cards`
+**DoD:** User tạo môn học, thêm bộ thẻ vào môn, thêm thẻ vào bộ, cấu hình reminder, flip animation mượt.
 
 ---
 
@@ -186,16 +209,71 @@
 
 ### 2.5 Notification System
 
+> **Kiến trúc 2 lớp:**
+> - **Lớp 1 — WebSocket/STOMP**: thông báo realtime khi user đang mở app
+> - **Lớp 2 — Web Push API**: background notification khi user đóng tab/app
+
+#### 2.5.1 WebSocket Server (In-app Realtime)
+
 | # | Chức năng | Mô tả chi tiết | Công nghệ | Độ ưu tiên |
 |---|-----------|----------------|-----------|------------|
-| 2.5.1 | Nhắc học hàng ngày | Push notification theo giờ user cài đặt | Spring `@Scheduled` + **java-webpush** | 🔴 Bắt buộc |
-| 2.5.2 | Nhắc ôn bài SR | Thông báo khi có thẻ cần ôn hôm nay | Spring cron + Web Push + Angular Service Worker | 🔴 Bắt buộc |
-| 2.5.3 | Nhắc khi gần mất streak | Thông báo lúc 20h nếu hôm nay chưa học | Spring `@Scheduled("0 0 20 * * ?")`+ Web Push | 🔴 Bắt buộc |
-| 2.5.4 | User tự cài giờ nhắc | Cài giờ nhận thông báo trong Settings | Angular Settings + `notification_settings` table | 🟡 Quan trọng |
-| 2.5.5 | Đăng ký nhận Web Push | Browser xin quyền, lưu subscription lên server | Angular Service Worker + Spring lưu `push_subscriptions` | 🔴 Bắt buộc |
+| 2.5.1 | WebSocket endpoint | STOMP over SockJS tại `/ws`, JWT auth qua ChannelInterceptor | `spring-boot-starter-websocket` + STOMP | 🔴 Bắt buộc |
+| 2.5.2 | Online user registry | Redis Set lưu userId đang kết nối WS (TTL 30 phút) | Spring Data Redis | 🔴 Bắt buộc |
+| 2.5.3 | In-app toast notification | Nhận STOMP message → hiện toast góc phải, tự tắt 5s | Angular `@stomp/stompjs` + SockJS | 🔴 Bắt buộc |
+| 2.5.4 | Notification bell & panel | Icon chuông có badge unread, click mở panel lịch sử | Angular Signals | 🟡 Quan trọng |
+| 2.5.5 | Reward pop-up realtime | Sau session → server push reward qua WS → animation popup | Angular Animations | 🟡 Quan trọng |
 
-**Backend:** `NotificationScheduler`, `WebPushService`, `PushSubscriptionRepository`
-**Frontend:** `NotificationService` (Angular), `PushSubscriptionComponent`
+#### 2.5.2 Notification Schedulers
+
+| # | Scheduler | Trigger | Loại thông báo | Độ ưu tiên |
+|---|-----------|---------|----------------|------------|
+| 2.5.6 | Subject reminder | Cron mỗi phút — đọc reminder config từ flashcard-service | WS nếu online, Web Push nếu offline | 🔴 Bắt buộc |
+| 2.5.7 | Streak warning | Cron lúc 20:00 — nếu hôm nay chưa học | WS + Web Push | 🔴 Bắt buộc |
+| 2.5.8 | FSRS due reminder | Cron 9:00 sáng — nếu có thẻ cần ôn | WS + Web Push | 🟡 Quan trọng |
+| 2.5.9 | Daily study reminder | Cron theo giờ cài trong user_settings | WS + Web Push | 🟡 Quan trọng |
+
+**Logic Subject Reminder Scheduler:**
+```
+Every minute @Scheduled:
+  1. Gọi Feign → flashcard-service /internal/subjects/due-reminders?at={now}
+  2. Nhận list [{userId, subjectName, reminderType, message}]
+  3. Check Redis: isOnline(userId)?
+     → YES: SimpMessagingTemplate → /user/{id}/queue/notification
+     → NO:  WebPushService → java-webpush → Service Worker
+  4. Log vào notification_logs (tránh gửi trùng)
+```
+
+**Reminder type → logic "due":**
+```
+MINUTES  → user có active session > N phút (cần session info)
+HOURS    → notification_logs không có record trong N giờ qua cho subject này
+DAILY    → time khớp reminder_time (±1 phút), chưa gửi hôm nay
+WEEKLY   → day in reminder_days AND time khớp (±1 phút), chưa gửi tuần này
+```
+
+#### 2.5.3 Web Push (Background)
+
+| # | Chức năng | Mô tả chi tiết | Công nghệ | Độ ưu tiên |
+|---|-----------|----------------|-----------|------------|
+| 2.5.10 | Đăng ký Web Push | Browser xin quyền → subscribe VAPID → POST subscription | Angular `pushManager.subscribe()` + Spring | 🔴 Bắt buộc |
+| 2.5.11 | Gửi push từ server | Server → java-webpush → Browser Push Server → OS notification | `nl.martijndwars:web-push` | 🔴 Bắt buộc |
+| 2.5.12 | Service Worker handler | Nhận push event → hiện notification kể cả khi đóng tab | Angular Service Worker (`@angular/pwa`) | 🔴 Bắt buộc |
+| 2.5.13 | VAPID key management | Tạo VAPID key pair, lưu vào env, public key gửi cho browser | `webpush.generateVAPIDKeys()` | 🔴 Bắt buộc |
+
+**Backend:** `WebSocketConfig`, `WebSocketAuthInterceptor`, `OnlineUserRegistry`, `WebPushService`, `SubjectReminderScheduler`, `StreakWarningScheduler`, `PushSubscriptionController`, `NotificationLog` entity
+**Frontend:** `NotificationService` (STOMP), `WebPushService` (subscription), `NotificationBellComponent`, `NotificationToastComponent`, `ngsw-config.json`
+**DoD:** User nhận toast realtime khi mở app, nhận OS notification khi đóng tab, đúng giờ đã cấu hình trong Subject.
+
+#### UI Top Bar — Notification Bar (đã implement)
+```
+[📢 Thông báo] [← ticker cuộn tên thông báo gần nhất ← ]  [🔔 badge]
+```
+- **Ticker**: Hiện title 5 thông báo gần nhất, cuộn từ phải sang trái liên tục. Nếu không có thông báo thì hiện text welcome.
+- **Bell badge**: Số thông báo chưa đọc (đỏ, góc trên phải icon).
+- **Panel dropdown**: Click bell → danh sách thông báo order theo thời gian mới nhất. Mỗi item click → navigate đến màn liên quan + mark as read.
+  - `SUBJECT_REMINDER` → `/deck`
+  - `STREAK_WARNING` → `/dashboard`
+  - `REVIEW_DUE` → `/review`
 
 ---
 

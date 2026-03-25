@@ -1,6 +1,6 @@
 # 🏗️ Kiến Trúc Hệ Thống - Learn App
 
-> **Stack:** Spring Boot 3 · Angular 17 · PostgreSQL · Redis · Docker · OpenFeign · Eureka
+> **Stack:** Spring Boot 3 · Angular 17 · PostgreSQL · Redis · Docker · OpenFeign · WebSocket/STOMP · Web Push
 
 ---
 
@@ -10,15 +10,18 @@
                          ┌─────────────────────────────────────────┐
                          │              CLIENT                      │
                          │         Angular 17 (SPA)                 │
-                         └───────────────────┬─────────────────────┘
-                                             │ HTTPS
-                                             ▼
+                         │  • HTTP/REST (ApiService)                │
+                         │  • WebSocket/STOMP (NotificationService) │
+                         │  • Service Worker (Web Push)             │
+                         └──────────────┬──────────────────────────┘
+                                        │ HTTPS + WSS
+                                        ▼
                          ┌─────────────────────────────────────────┐
                          │           API GATEWAY :8080              │
                          │       Spring Cloud Gateway               │
-                         │  • JWT validation                        │
+                         │  • JWT validation (HTTP)                 │
+                         │  • WebSocket proxy → study-service       │
                          │  • Rate limiting                         │
-                         │  • Route → service (via Eureka)          │
                          └──────┬──────────────┬────────────┬───────┘
                                 │              │            │
               ┌─────────────────┘    ┌─────────┘    ┌──────┘
@@ -27,11 +30,13 @@
 │   auth-service      │  │  study-service    │  │ flashcard-service │
 │       :8081         │  │      :8082        │  │      :8083        │
 │                     │  │                   │  │                   │
-│ • Đăng ký / Login   │  │ • Study Timer     │  │ • Deck & Cards    │
-│ • JWT issue/verify  │  │ • Study Sessions  │  │ • Tags            │
+│ • Đăng ký / Login   │  │ • Study Timer     │  │ • Subject/Deck    │
+│ • JWT issue/verify  │  │ • Study Sessions  │  │ • Cards & Tags    │
 │ • OAuth2 Google     │  │ • Streak System   │  │ • Spaced Repeat.  │
 │ • User profile      │  │ • Reward/Gamify   │  │ • AI Flashcard    │
-│ • Role management   │  │ • Goals & Notif.  │  │ • Proof of Study  │
+│ • Role management   │  │ • Goals           │  │ • Subject Remind  │
+│                     │  │ • WebSocket/STOMP │  │   config (lưu DB) │
+│                     │  │ • Notification    │  │                   │
 │                     │  │ • Analytics       │  │                   │
 └──────────┬──────────┘  └────────┬──────────┘  └────────┬──────────┘
            │                      │                       │
@@ -104,10 +109,12 @@
 | `/api/v1/rewards/**` | `study-service` | Cần JWT |
 | `/api/v1/analytics/**` | `study-service` | Cần JWT |
 | `/api/v1/goals/**` | `study-service` | Cần JWT |
+| `/api/v1/subjects/**` | `flashcard-service` | Cần JWT |
 | `/api/v1/decks/**` | `flashcard-service` | Cần JWT |
 | `/api/v1/cards/**` | `flashcard-service` | Cần JWT |
 | `/api/v1/reviews/**` | `flashcard-service` | Cần JWT |
 | `/api/v1/ai/**` | `flashcard-service` | Cần JWT |
+| `/ws/**` | `study-service` | WebSocket (STOMP) — JWT qua header |
 
 **JWT Filter:** Gateway validate JWT trước khi forward — nếu invalid thì trả 401 ngay, không cần đến service.
 
@@ -164,6 +171,18 @@ GET /internal/users/{userId}/exists      Kiểm tra user tồn tại
 - `reward_logs` — lịch sử nhận reward (XP, coin)
 - `proof_of_study` — ảnh bằng chứng học
 - `user_goals` — mục tiêu học hàng ngày
+- `push_subscriptions` — Web Push subscription (endpoint + keys)
+- `notification_logs` — lịch sử thông báo đã gửi (tránh spam)
+
+**WebSocket endpoint (STOMP):**
+```
+ws://host/ws          ← SockJS endpoint (qua gateway proxy)
+```
+Client subscribe:
+```
+/user/queue/notification   ← thông báo cá nhân (reminder, streak...)
+/user/queue/reward         ← reward pop-up sau session
+```
 
 **Feign Clients:**
 ```java
@@ -207,10 +226,21 @@ POST /api/v1/sessions/complete
 | Gọi service khác | `auth-service` (Feign) |
 
 **Bảng DB (schema: flashcard):**
-- `decks` — bộ thẻ học
+- `subjects` — môn học (thư mục), có reminder config
+- `decks` — bộ thẻ học (thuộc 1 subject)
 - `cards` — flashcard (text + image, FSRS fields)
 - `tags` / `card_tags` — gắn tag cho thẻ
 - `card_reviews` — lịch sử ôn tập SR
+
+**Subject reminder config (lưu trong `flashcard.subjects`):**
+```
+reminder_type     VARCHAR(20)   "MINUTES" | "HOURS" | "DAILY" | "WEEKLY"
+reminder_interval INTEGER       số phút / giờ (cho MINUTES/HOURS)
+reminder_time     TIME          giờ nhắc (cho DAILY/WEEKLY)
+reminder_days     VARCHAR(50)   "MON,WED,FRI" (cho WEEKLY)
+```
+> Flashcard-service **chỉ lưu config**, không tự gửi thông báo.
+> Study-service đọc config qua Feign → chạy scheduler → gửi thông báo.
 
 **Feign Client:**
 ```java
@@ -492,4 +522,398 @@ Mỗi service sở hữu schema riêng trong cùng PostgreSQL instance:
 
 ---
 
-*Tài liệu được tạo ngày 2026-03-25*
+---
+
+## 10. Hệ thống Thông báo (Notification System)
+
+### 10.1 Kiến trúc 2 lớp
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    NOTIFICATION SYSTEM                         │
+│                                                                │
+│  Lớp 1 — In-app realtime (WebSocket / STOMP)                  │
+│  ──────────────────────────────────────────                    │
+│  Khi user đang mở app → nhận thông báo ngay lập tức           │
+│  • Reminder nhắc học môn theo config                           │
+│  • Cảnh báo sắp mất streak (< 1 tiếng)                        │
+│  • Reward pop-up sau khi hoàn thành session                    │
+│  • Thông báo FSRS: có thẻ cần ôn hôm nay                      │
+│                                                                │
+│  Lớp 2 — Background push (Web Push API / Service Worker)      │
+│  ──────────────────────────────────────────────────────        │
+│  Khi user đóng app hoặc tab → nhận push notification           │
+│  • Reminder đúng giờ đã cấu hình trong Subject                 │
+│  • Streak warning lúc 20h nếu chưa học                        │
+│  • Daily study reminder (global setting)                       │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### 10.2 Sơ đồ luồng thông báo
+
+```
+[Scheduler @Scheduled]         [study-service]          [Angular Client]
+       │                              │                        │
+       │  Mỗi phút: check reminders  │                        │
+       │─────────────────────────────►│                        │
+       │                              │                        │
+       │  Gọi Feign → flashcard-svc  │                        │
+       │  GET /internal/subjects/     │                        │
+       │     due-reminders            │                        │
+       │                              │                        │
+       │  flashcard trả về:           │                        │
+       │  [{userId, type, msg}, ...]  │                        │
+       │◄─────────────────────────────│                        │
+       │                              │                        │
+       │  Với mỗi userId:             │                        │
+       │  → User đang online?         │                        │
+       │    YES → WebSocket push      │──────────────────────► │
+       │         /user/queue/notif    │    STOMP message       │
+       │                              │                        │
+       │    NO  → Web Push API        │──── java-webpush ────► │
+       │         gửi đến browser      │    (Service Worker)    │
+       │                              │                        │
+```
+
+### 10.3 WebSocket Server (study-service)
+
+**Dependencies (pom.xml):**
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-websocket</artifactId>
+</dependency>
+```
+
+**Config class:**
+```java
+@Configuration
+@EnableWebSocketMessageBroker
+public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // SockJS fallback cho browser không hỗ trợ native WS
+        registry.addEndpoint("/ws")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
+    }
+
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry config) {
+        config.enableSimpleBroker("/user", "/topic");
+        config.setApplicationDestinationPrefixes("/app");
+        config.setUserDestinationPrefix("/user");  // /user/{userId}/queue/...
+    }
+}
+```
+
+**JWT Authentication cho WebSocket:**
+```java
+@Component
+public class WebSocketAuthInterceptor implements ChannelInterceptor {
+    // Đọc JWT từ STOMP header "Authorization"
+    // Set Authentication vào SecurityContext
+    // → SimpMessagingTemplate.convertAndSendToUser() dùng username từ Principal
+}
+```
+
+**Gửi thông báo:**
+```java
+@Autowired SimpMessagingTemplate messagingTemplate;
+
+// Gửi đến 1 user cụ thể
+messagingTemplate.convertAndSendToUser(
+    userId.toString(),           // username (Principal name)
+    "/queue/notification",       // destination
+    NotificationPayload.of(type, title, body)
+);
+```
+
+**Các loại thông báo:**
+```java
+public enum NotificationType {
+    SUBJECT_REMINDER,   // nhắc học môn (từ Subject config)
+    STREAK_WARNING,     // sắp mất streak
+    FSRS_DUE,          // có thẻ cần ôn hôm nay
+    REWARD,            // nhận reward sau session
+    DAILY_REMINDER     // nhắc học hàng ngày (global)
+}
+```
+
+### 10.4 Subject Reminder Scheduler
+
+```java
+@Component
+@RequiredArgsConstructor
+public class SubjectReminderScheduler {
+
+    private final FlashcardFeignClient flashcardClient;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final WebPushService webPushService;
+    private final OnlineUserRegistry onlineUsers; // Redis Set: userId đang kết nối WS
+
+    // Chạy mỗi phút
+    @Scheduled(cron = "0 * * * * *")
+    public void checkSubjectReminders() {
+        List<DueReminderDTO> due = flashcardClient.getDueReminders(LocalDateTime.now());
+
+        for (DueReminderDTO reminder : due) {
+            NotificationPayload payload = NotificationPayload.builder()
+                .type(NotificationType.SUBJECT_REMINDER)
+                .title("⏰ Nhắc học: " + reminder.subjectName())
+                .body(buildBody(reminder))
+                .build();
+
+            if (onlineUsers.isOnline(reminder.userId())) {
+                // User đang mở app → WebSocket
+                messagingTemplate.convertAndSendToUser(
+                    reminder.userId().toString(),
+                    "/queue/notification", payload
+                );
+            } else {
+                // User offline → Web Push
+                webPushService.sendToUser(reminder.userId(), payload);
+            }
+        }
+    }
+
+    private String buildBody(DueReminderDTO r) {
+        return switch (r.reminderType()) {
+            case "MINUTES" -> "Bạn đã học " + r.reminderInterval() + " phút rồi, nghỉ ngắn nhé!";
+            case "HOURS"   -> "Đã " + r.reminderInterval() + " giờ — nhớ học " + r.subjectName();
+            case "DAILY"   -> "Đến giờ học " + r.subjectName() + " rồi!";
+            case "WEEKLY"  -> "Hôm nay là ngày học " + r.subjectName();
+            default        -> "Nhắc học " + r.subjectName();
+        };
+    }
+}
+```
+
+**Logic xác định "due reminder" trong flashcard-service:**
+```java
+// Internal API endpoint: GET /internal/subjects/due-reminders?datetime=...
+// Trả về các subject có reminder khớp với thời điểm hiện tại:
+
+MINUTES → kiểm tra session đang chạy có > N phút không (cần session info)
+HOURS   → kiểm tra lần nhắc cuối > N giờ trước
+DAILY   → time == reminder_time (±1 phút)
+WEEKLY  → day in reminder_days AND time == reminder_time (±1 phút)
+```
+
+### 10.5 Online User Registry (Redis)
+
+```java
+// Khi user connect WebSocket
+@EventListener
+public void handleConnect(SessionConnectedEvent event) {
+    String userId = extractUserId(event);
+    redisTemplate.opsForSet().add("ws:online", userId);
+    redisTemplate.expire("ws:online:" + userId, 30, TimeUnit.MINUTES);
+}
+
+// Khi user disconnect
+@EventListener
+public void handleDisconnect(SessionDisconnectEvent event) {
+    String userId = extractUserId(event);
+    redisTemplate.opsForSet().remove("ws:online", userId);
+}
+
+// Check online
+public boolean isOnline(UUID userId) {
+    return Boolean.TRUE.equals(
+        redisTemplate.opsForSet().isMember("ws:online", userId.toString())
+    );
+}
+```
+
+### 10.6 Web Push (Background Notification)
+
+**Dependency:**
+```xml
+<dependency>
+    <groupId>nl.martijndwars</groupId>
+    <artifactId>web-push</artifactId>
+    <version>5.1.1</version>
+</dependency>
+```
+
+**Flow đăng ký:**
+```
+1. Angular xin quyền browser: Notification.requestPermission()
+2. Service Worker đăng ký: pushManager.subscribe({...vapidPublicKey})
+3. Angular gửi subscription lên: POST /api/v1/push/subscribe
+   Body: { endpoint, p256dh, auth }
+4. study-service lưu vào push_subscriptions table
+```
+
+**Gửi push:**
+```java
+@Service
+public class WebPushService {
+    private final PushService pushService; // java-webpush
+
+    public void sendToUser(UUID userId, NotificationPayload payload) {
+        List<PushSubscription> subs = pushSubRepo.findByUserId(userId);
+        for (PushSubscription sub : subs) {
+            Notification notif = new Notification(
+                sub.getEndpoint(), sub.getP256dh(), sub.getAuth(),
+                objectMapper.writeValueAsBytes(payload)
+            );
+            pushService.send(notif); // HTTP POST đến browser push server
+        }
+    }
+}
+```
+
+### 10.7 Angular Client (NotificationService)
+
+**Dependencies:**
+```bash
+npm install @stomp/stompjs sockjs-client
+npm install @types/sockjs-client -D
+```
+
+**Service:**
+```typescript
+@Injectable({ providedIn: 'root' })
+export class NotificationService {
+  private client!: Client;
+  notifications = signal<AppNotification[]>([]);
+  unreadCount   = computed(() => this.notifications().filter(n => !n.read).length);
+
+  connect(token: string) {
+    this.client = new Client({
+      webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      connectHeaders: { Authorization: `Bearer ${token}` },
+      onConnect: () => {
+        // Subscribe kênh cá nhân
+        this.client.subscribe('/user/queue/notification', msg => {
+          const notif: AppNotification = JSON.parse(msg.body);
+          this.notifications.update(list => [notif, ...list]);
+          this.showToast(notif);
+        });
+        // Subscribe reward
+        this.client.subscribe('/user/queue/reward', msg => {
+          // Mở reward popup
+        });
+      }
+    });
+    this.client.activate();
+  }
+
+  disconnect() { this.client?.deactivate(); }
+
+  private showToast(notif: AppNotification) {
+    // Hiển thị toast góc dưới phải, tự động tắt sau 5s
+  }
+}
+```
+
+**Kết nối sau khi login:**
+```typescript
+// Trong AuthService.login():
+this.notificationService.connect(data.accessToken);
+
+// Trong AuthService.logout():
+this.notificationService.disconnect();
+```
+
+### 10.8 Tóm tắt: Files cần tạo (Phase 2)
+
+**study-service backend:**
+```
+config/
+  WebSocketConfig.java          ← STOMP config + SockJS endpoint
+  WebSocketSecurityConfig.java  ← JWT auth cho WS handshake
+  WebSocketAuthInterceptor.java ← ChannelInterceptor validate JWT
+
+service/
+  WebPushService.java           ← Gửi background push notification
+  OnlineUserRegistry.java       ← Redis Set track user đang kết nối
+
+scheduler/
+  SubjectReminderScheduler.java ← Cron check reminder config
+  StreakWarningScheduler.java   ← Cron check streak sắp mất
+  DailyReminderScheduler.java   ← Cron daily reminder
+
+controller/
+  PushSubscriptionController.java ← POST /api/v1/push/subscribe
+
+entity/
+  PushSubscription.java         ← endpoint, p256dh, auth
+  NotificationLog.java          ← log thông báo đã gửi
+
+dto/
+  NotificationPayload.java      ← type, title, body, data
+  DueReminderDTO.java           ← từ flashcard-service
+```
+
+**flashcard-service backend:**
+```
+internal/
+  InternalSubjectController.java ← GET /internal/subjects/due-reminders
+
+service/impl/
+  SubjectReminderQueryService.java ← logic tìm subject đến hạn nhắc
+```
+
+**api-gateway — thêm route:**
+```yaml
+- id: websocket
+  uri: ws://learn-study:8082
+  predicates:
+    - Path=/ws/**
+  # WebSocket không cần JwtFilter (WS authenticate qua STOMP header)
+```
+
+**Angular frontend:**
+```
+core/services/
+  notification.service.ts       ← STOMP client, signals, toast
+  web-push.service.ts           ← đăng ký push subscription
+
+shared/components/
+  notification-bell.component.ts ← icon chuông + badge unread
+  notification-toast.component.ts ← toast pop-up góc dưới phải
+  notification-panel.component.ts ← panel danh sách thông báo
+
+ngsw-config.json                  ← Angular Service Worker config
+```
+
+---
+
+## 11. Luồng đầy đủ: Subject Reminder (DAILY example)
+
+```
+[User] Tạo Subject "Tiếng Anh", reminderType=DAILY, reminderTime="20:00"
+         │
+         ▼ POST /api/v1/subjects
+[flashcard-service] lưu subjects table
+         │
+         │  ← cron mỗi phút 20:00 →
+         ▼
+[SubjectReminderScheduler trong study-service]
+  Gọi Feign → GET /internal/subjects/due-reminders?at=20:00&dayOfWeek=MON
+         │
+         ▼
+[flashcard-service] query:
+  SELECT s.user_id, s.name, s.reminder_type, ...
+  FROM flashcard.subjects s
+  WHERE reminder_enabled = true
+    AND reminder_type = 'DAILY'
+    AND reminder_time BETWEEN '19:59' AND '20:01'
+  Trả về: [{userId: "abc", subjectName: "Tiếng Anh", ...}]
+         │
+         ▼
+[study-service] với userId = "abc":
+  Redis check: isOnline("abc")?
+    YES → SimpMessagingTemplate.convertAndSendToUser("abc", "/queue/notification", payload)
+              → Angular nhận qua STOMP → hiện toast "⏰ Đến giờ học Tiếng Anh rồi!"
+    NO  → WebPushService.sendToUser("abc", payload)
+              → java-webpush → Browser Push Server → Service Worker → OS notification
+```
+
+---
+
+*Tài liệu được cập nhật ngày 2026-03-25 — Stack: Spring Boot 3 + Angular 17+*

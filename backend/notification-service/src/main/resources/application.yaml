@@ -1,0 +1,59 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: notification-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/learn_app?currentSchema=notification}
+    username: ${DB_USERNAME:learn_user}
+    password: ${DB_PASSWORD:learn_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: notification
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis_pass}
+
+# ── JWT secret — shared across services for token validation ──
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+# ── Downstream service URLs ────────────────────────────
+services:
+  study-url: ${STUDY_SERVICE_URL:http://learn-study:8082}
+  flashcard-url: ${FLASHCARD_SERVICE_URL:http://learn-flashcard:8083}
+
+# ── OpenFeign ─────────────────────────────────────────
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 3000
+        readTimeout: 5000
+        loggerLevel: BASIC
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.learnapp.notification: DEBUG

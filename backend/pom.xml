@@ -22,6 +22,7 @@
         <module>auth-service</module>
         <module>study-service</module>
         <module>flashcard-service</module>
+        <module>notification-service</module>
     </modules>
 
     <properties>

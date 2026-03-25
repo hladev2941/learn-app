@@ -1,0 +1,66 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: study-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/learn_app?currentSchema=study}
+    username: ${DB_USERNAME:learn_user}
+    password: ${DB_PASSWORD:learn_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: study
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis_pass}
+
+# ── Service URLs for Feign clients ─────────────────────
+services:
+  auth-url: ${AUTH_SERVICE_URL:http://learn-auth:8081}
+  flashcard-url: ${FLASHCARD_SERVICE_URL:http://learn-flashcard:8083}
+
+# ── OpenFeign client config ────────────────────────────
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+        loggerLevel: BASIC
+      auth-service:          # override riêng cho auth-service
+        connectTimeout: 3000
+        readTimeout: 5000
+      flashcard-service:
+        connectTimeout: 3000
+        readTimeout: 5000
+
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.learnapp.study: DEBUG

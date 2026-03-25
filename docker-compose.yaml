@@ -1,0 +1,193 @@
+services:
+
+  # ══════════════════════════════════════════════════
+  # INFRASTRUCTURE
+  # ══════════════════════════════════════════════════
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: learn-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-learn_app}
+      POSTGRES_USER: ${POSTGRES_USER:-learn_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-learn_pass}
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - learn_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-learn_user} -d ${POSTGRES_DB:-learn_app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: learn-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_pass} --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - learn_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_pass}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: learn-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@learnapp.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - learn_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ══════════════════════════════════════════════════
+  # API GATEWAY
+  # ══════════════════════════════════════════════════
+
+  api-gateway:
+    build:
+      context: ./backend
+      dockerfile: api-gateway/Dockerfile
+    container_name: learn-gateway
+    restart: unless-stopped
+    environment:
+      AUTH_SERVICE_URL: http://learn-auth:8081
+      STUDY_SERVICE_URL: http://learn-study:8082
+      FLASHCARD_SERVICE_URL: http://learn-flashcard:8083
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "8080:8080"
+    networks:
+      - learn_net
+    depends_on:
+      - auth-service
+      - study-service
+      - flashcard-service
+
+  # ══════════════════════════════════════════════════
+  # BUSINESS SERVICES
+  # ══════════════════════════════════════════════════
+
+  auth-service:
+    build:
+      context: ./backend
+      dockerfile: auth-service/Dockerfile
+    container_name: learn-auth
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://learn-postgres:5432/${POSTGRES_DB:-learn_app}?currentSchema=auth
+      DB_USERNAME: ${POSTGRES_USER:-learn_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-learn_pass}
+      REDIS_HOST: learn-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_pass}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      JWT_ACCESS_EXP: ${JWT_ACCESS_EXP:-3600000}
+      JWT_REFRESH_EXP: ${JWT_REFRESH_EXP:-604800000}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "8081:8081"
+    networks:
+      - learn_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  study-service:
+    build:
+      context: ./backend
+      dockerfile: study-service/Dockerfile
+    container_name: learn-study
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://learn-postgres:5432/${POSTGRES_DB:-learn_app}?currentSchema=study
+      DB_USERNAME: ${POSTGRES_USER:-learn_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-learn_pass}
+      REDIS_HOST: learn-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_pass}
+      AUTH_SERVICE_URL: http://learn-auth:8081
+      FLASHCARD_SERVICE_URL: http://learn-flashcard:8083
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "8082:8082"
+    networks:
+      - learn_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  flashcard-service:
+    build:
+      context: ./backend
+      dockerfile: flashcard-service/Dockerfile
+    container_name: learn-flashcard
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://learn-postgres:5432/${POSTGRES_DB:-learn_app}?currentSchema=flashcard
+      DB_USERNAME: ${POSTGRES_USER:-learn_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-learn_pass}
+      AUTH_SERVICE_URL: http://learn-auth:8081
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "8083:8083"
+    networks:
+      - learn_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# ══════════════════════════════════════════════════
+# VOLUMES & NETWORK
+# ══════════════════════════════════════════════════
+
+volumes:
+  postgres_data:
+  redis_data:
+  pgadmin_data:
+
+networks:
+  learn_net:
+    driver: bridge

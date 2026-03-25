@@ -1,0 +1,52 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+      routes:
+        # ── auth-service ──────────────────────────────
+        - id: auth-public
+          uri: ${AUTH_SERVICE_URL:http://learn-auth:8081}
+          predicates:
+            - Path=/api/v1/auth/**
+
+        - id: auth-protected
+          uri: ${AUTH_SERVICE_URL:http://learn-auth:8081}
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - name: JwtAuthenticationFilter
+
+        # ── study-service ─────────────────────────────
+        - id: study-service
+          uri: ${STUDY_SERVICE_URL:http://learn-study:8082}
+          predicates:
+            - Path=/api/v1/sessions/**, /api/v1/streaks/**, /api/v1/rewards/**, /api/v1/analytics/**, /api/v1/goals/**
+          filters:
+            - name: JwtAuthenticationFilter
+
+        # ── flashcard-service ─────────────────────────
+        - id: flashcard-service
+          uri: ${FLASHCARD_SERVICE_URL:http://learn-flashcard:8083}
+          predicates:
+            - Path=/api/v1/decks/**, /api/v1/cards/**, /api/v1/reviews/**, /api/v1/ai/**
+          filters:
+            - name: JwtAuthenticationFilter
+
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO

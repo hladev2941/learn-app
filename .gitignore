@@ -1,0 +1,48 @@
+# ── Secrets & Environment ──────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Docker ─────────────────────────────────────────────
+docker/pgdata/
+docker/redis-data/
+
+# ── Reference / scratch images ─────────────────────────
+baseImgs/
+imgsErr/
+
+# ── Puppeteer / scripts tạm ────────────────────────────
+take-screenshots.js
+node_modules/
+
+# ── Claude Code internal ───────────────────────────────
+.claude/
+
+# ── Backend — Maven / Java ─────────────────────────────
+backend/**/target/
+backend/**/*.class
+backend/**/*.jar
+backend/**/*.war
+backend/**/.mvn/wrapper/maven-wrapper.jar
+!backend/**/.mvn/wrapper/maven-wrapper.properties
+
+# ── Frontend — Angular / Node ──────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/.cache/
+
+# ── IDE / Editor ───────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs ───────────────────────────────────────────────
+*.log
+logs/
+/tmp/

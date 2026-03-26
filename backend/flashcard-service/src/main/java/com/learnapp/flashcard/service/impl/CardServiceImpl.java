@@ -48,6 +48,8 @@ public class CardServiceImpl {
                 .backText(request.backText())
                 .backImageUrl(request.backImageUrl())
                 .tags(tags)
+                .source(request.source())
+                .contentFormat(request.contentFormat() != null ? request.contentFormat() : "plain")
                 .build();
 
         return CardResponse.from(cardRepository.save(card));
@@ -63,6 +65,8 @@ public class CardServiceImpl {
         if (request.backText() != null)      card.setBackText(request.backText());
         if (request.backImageUrl() != null)  card.setBackImageUrl(request.backImageUrl());
         if (request.tags() != null)          card.setTags(resolveTags(userId, request.tags()));
+        if (request.source() != null)        card.setSource(request.source());
+        if (request.contentFormat() != null) card.setContentFormat(request.contentFormat());
 
         return CardResponse.from(cardRepository.save(card));
     }

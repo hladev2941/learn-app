@@ -74,25 +74,28 @@
 ### 1.4 Flashcard System
 
 > **Cấu trúc phân cấp:** Subject (Môn học) → Deck (Bộ thẻ) → Card (Thẻ)
+> **Nâng cấp 2026-03-26:** Card hỗ trợ Rich Text (HTML formatting) + trường `source` nguồn tài liệu.
 
 #### Hierarchy
 ```
 Subject "Tiếng Anh"        ← môn học / thư mục, có reminder config
   └─ Deck "Unit 1 — Greetings"   ← bộ thẻ, có màu sắc
-       └─ Card "Hello / Xin chào"       ← thẻ, có FSRS state + tags
+       └─ Card "Hello / Xin chào"       ← thẻ, có FSRS state + tags + source
 ```
 
 | # | Chức năng | Mô tả chi tiết | Công nghệ | Độ ưu tiên |
 |---|-----------|----------------|-----------|------------|
-| 1.4.0 | Subject (Môn học) | Tạo, đặt tên, chọn emoji, màu, cấu hình reminder | Spring `Subject` entity + `SubjectController` | 🔴 Bắt buộc |
+| 1.4.0 | Subject (Môn học) | Tạo, đặt tên, chọn emoji, màu, cấu hình reminder | Spring `Subject` entity + `SubjectController` | ✅ Hoàn thành |
 | 1.4.1 | Nhắc học theo môn | Bật/tắt, chọn giờ và ngày trong tuần cho từng môn | Config lưu DB → scheduler Phase 2 gửi push | 🟡 Quan trọng |
-| 1.4.2 | Deck trong môn học | Tạo bộ thẻ thuộc 1 môn, có màu sắc | Spring `Deck` entity + `DeckController` | 🔴 Bắt buộc |
-| 1.4.3 | Tạo flashcard (text) | Form tạo thẻ: mặt trước / mặt sau (text) | Angular Forms + Spring REST | 🔴 Bắt buộc |
+| 1.4.2 | Deck trong môn học | Tạo bộ thẻ thuộc 1 môn, có màu sắc | Spring `Deck` entity + `DeckController` | ✅ Hoàn thành |
+| 1.4.3 | Tạo flashcard (text) | Form tạo thẻ: mặt trước / mặt sau (text) | Angular Forms + Spring REST | ✅ Hoàn thành |
+| 1.4.3b | **Rich Text Formatting** | Toolbar: B/I/U/S + font size + màu chữ + màu nền | `contenteditable` + `execCommand` | ✅ Hoàn thành (2026-03-26) |
+| 1.4.3c | **Nguồn tài liệu** | Trường `source` + badge hiển thị trong card list | DB column + UI badge | ✅ Hoàn thành (2026-03-26) |
 | 1.4.4 | Tạo flashcard (có ảnh) | Upload ảnh cho mặt trước hoặc mặt sau | Cloudinary Java SDK + Angular file upload | 🟡 Quan trọng |
-| 1.4.5 | Gắn tag cho thẻ | Gắn nhiều tag tự do vào thẻ | JPA `@ManyToMany` giữa `Card` và `Tag` | 🟡 Quan trọng |
-| 1.4.6 | Lật thẻ (flip animation) | Click thẻ → lật xem đáp án | Angular Animations + CSS 3D transform | 🔴 Bắt buộc |
-| 1.4.7 | Học theo chế độ Random | Hiện ngẫu nhiên các thẻ trong deck | `Collections.shuffle()` phía Spring hoặc Angular | 🔴 Bắt buộc |
-| 1.4.8 | Sửa / Xoá thẻ | CRUD đầy đủ | Spring REST API (PATCH, DELETE) | 🔴 Bắt buộc |
+| 1.4.5 | Gắn tag cho thẻ | Gắn nhiều tag tự do vào thẻ | JPA `@ManyToMany` giữa `Card` và `Tag` | ✅ Hoàn thành |
+| 1.4.6 | Lật thẻ (flip animation) | Click thẻ → lật xem đáp án | Angular Animations + CSS 3D transform | ✅ Hoàn thành |
+| 1.4.7 | Học theo chế độ Random | Hiện ngẫu nhiên các thẻ trong deck | `Collections.shuffle()` phía Spring hoặc Angular | ✅ Hoàn thành |
+| 1.4.8 | Sửa / Xoá thẻ | CRUD đầy đủ | Spring REST API (PATCH, DELETE) | ✅ Hoàn thành |
 
 #### Notification config per Subject
 ```
@@ -430,4 +433,4 @@ WEEKLY   → day in reminder_days AND time khớp (±1 phút), chưa gửi tuầ
 
 ---
 
-*Tài liệu được cập nhật ngày 2026-03-25 — Stack: Spring Boot 3 + Angular 17+*
+*Tài liệu được cập nhật ngày 2026-03-26 — Stack: Spring Boot 3 + Angular 17+*

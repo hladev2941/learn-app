@@ -519,6 +519,82 @@ const S = `
 
 /* ── No results ── */
 .no-results { text-align: center; padding: 32px; color: #94a3b8; font-size: .875rem; }
+
+/* ── Format toolbar ── */
+.format-toolbar {
+  display: flex; align-items: center; gap: 2px;
+  background: rgba(248,250,252,.95); border: 1.5px solid rgba(199,210,254,.7);
+  border-radius: 10px 10px 0 0; padding: 5px 8px; flex-wrap: wrap;
+}
+.fmt-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 6px;
+  background: transparent; border: none; cursor: pointer; color: #475569;
+  font-size: .875rem; transition: background .12s;
+}
+.fmt-btn:hover { background: rgba(99,102,241,.1); color: #6366f1; }
+.fmt-btn.active { background: rgba(99,102,241,.15); color: #6366f1; }
+.fmt-sep { width: 1px; height: 18px; background: rgba(199,210,254,.5); margin: 0 3px; }
+.fmt-select {
+  height: 26px; padding: 0 6px; border-radius: 6px;
+  background: rgba(248,250,252,.9); border: 1px solid rgba(199,210,254,.7);
+  font-size: .75rem; color: #475569; outline: none; cursor: pointer;
+}
+.fmt-select:focus { border-color: #6366f1; }
+.fmt-color {
+  width: 26px; height: 26px; padding: 2px; border-radius: 6px;
+  background: rgba(248,250,252,.9); border: 1px solid rgba(199,210,254,.7);
+  cursor: pointer; overflow: hidden;
+}
+.fmt-color::-webkit-color-swatch-wrapper { padding: 0; }
+.fmt-color::-webkit-color-swatch { border: none; border-radius: 4px; }
+
+/* ── Card source display ── */
+.card-source {
+  display: flex; align-items: center; gap: 3px;
+  font-size: .6875rem; color: #94a3b8; margin-top: 3px;
+}
+.card-source mat-icon { font-size: 11px; width: 11px; height: 11px; }
+
+/* ── Card modal — larger, scrollable ── */
+.modal-card-editor {
+  align-items: flex-start;
+  padding-top: 4vh;
+}
+.modal-card-editor .modal {
+  width: 640px;
+  max-width: 100%;
+  max-height: 90vh;
+  padding: 28px;
+  overflow-y: auto;
+}
+
+/* ── Rich text editor (inside modal card form) ── */
+.form-editor {
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1.5px solid rgba(199,210,254,.9);
+  border-radius: 0 0 12px 12px;
+  background: rgba(248,250,252,.8);
+  outline: none;
+  line-height: 1.55;
+  font-size: .875rem;
+  color: #1e1b4b;
+  font-family: inherit;
+  max-height: none;
+  overflow-y: auto;
+  resize: none;
+}
+.format-toolbar {
+  border-radius: 12px 12px 0 0;
+  border-bottom: none;
+}
+.form-editor:focus { border-color: #6366f1; }
+.form-editor:empty:before {
+  content: attr(data-placeholder); color: #9ca3af; pointer-events: none;
+}
+.form-editor b, .form-editor i, .form-editor u, .form-editor s { cursor: text; }
+.form-editor[contenteditable="true"] { user-select: text; -webkit-user-select: text; }
 `;
 
 @Component({
@@ -833,6 +909,12 @@ const S = `
                           @if (expandedCardId() !== card.id) {
                             <div class="flash-back-preview">{{ card.backText }}</div>
                           }
+                          @if (card.source) {
+                            <div class="card-source">
+                              <mat-icon>source</mat-icon>
+                              {{ card.source }}
+                            </div>
+                          }
                           @if (card.tags && card.tags.length) {
                             <div class="flash-tags">
                               @for (tag of card.tags; track tag) { <span class="tag-pill">{{ tag }}</span> }
@@ -1014,7 +1096,7 @@ const S = `
 
     <!-- ════ Card Modal ════ -->
     @if (showCardModal()) {
-      <div class="overlay" (click)="closeCardModal()">
+      <div class="overlay modal-card-editor" (click)="closeCardModal()">
         <div class="modal modal-wide" (click)="$event.stopPropagation()">
           <div class="modal-title">
             <mat-icon>{{ editingCard() ? 'edit' : 'add_circle' }}</mat-icon>
@@ -1022,15 +1104,60 @@ const S = `
           </div>
           <div class="form-group">
             <label class="form-label">Mặt trước *</label>
-            <textarea class="form-textarea" [(ngModel)]="cardForm.frontText" placeholder="Câu hỏi / từ cần học..."></textarea>
+            <div class="format-toolbar">
+              <button class="fmt-btn" (click)="formatText('bold')" title="Tô đậm"><b>B</b></button>
+              <button class="fmt-btn" (click)="formatText('italic')" title="In nghiêng"><i>I</i></button>
+              <button class="fmt-btn" (click)="formatText('underline')" title="Gạch chân"><u>U</u></button>
+              <button class="fmt-btn" (click)="formatText('strike')" title="Gạch ngang"><s>S</s></button>
+              <span class="fmt-sep"></span>
+              <select class="fmt-select" (change)="formatText('fontSize', $event)">
+                <option value="">Cỡ</option>
+                <option value="small">Nhỏ</option>
+                <option value="medium">Vừa</option>
+                <option value="large">Lớn</option>
+                <option value="xlarge">Rất lớn</option>
+              </select>
+              <span class="fmt-sep"></span>
+              <input type="color" class="fmt-color" title="Màu chữ" (change)="formatText('color', $event)" />
+              <input type="color" class="fmt-color" title="Màu nền" (change)="formatText('highlight', $event)" value="#fef08a" />
+            </div>
+            <div class="form-editor" contenteditable="true" #frontEditor
+                 [innerHTML]="cardForm.frontText"
+                 (input)="onEditorInput($event, 'frontText', frontEditor)"
+                 data-placeholder="Câu hỏi / từ cần học..."></div>
           </div>
           <div class="form-group">
             <label class="form-label">Mặt sau *</label>
-            <textarea class="form-textarea" [(ngModel)]="cardForm.backText" placeholder="Câu trả lời / nghĩa..."></textarea>
+            <div class="format-toolbar">
+              <button class="fmt-btn" (click)="formatText('bold')" title="Tô đậm"><b>B</b></button>
+              <button class="fmt-btn" (click)="formatText('italic')" title="In nghiêng"><i>I</i></button>
+              <button class="fmt-btn" (click)="formatText('underline')" title="Gạch chân"><u>U</u></button>
+              <button class="fmt-btn" (click)="formatText('strike')" title="Gạch ngang"><s>S</s></button>
+              <span class="fmt-sep"></span>
+              <select class="fmt-select" (change)="formatText('fontSize', $event)">
+                <option value="">Cỡ</option>
+                <option value="small">Nhỏ</option>
+                <option value="medium">Vừa</option>
+                <option value="large">Lớn</option>
+                <option value="xlarge">Rất lớn</option>
+              </select>
+              <span class="fmt-sep"></span>
+              <input type="color" class="fmt-color" title="Màu chữ" (change)="formatText('color', $event)" />
+              <input type="color" class="fmt-color" title="Màu nền" (change)="formatText('highlight', $event)" value="#fef08a" />
+            </div>
+            <div class="form-editor" contenteditable="true" #backEditor
+                 [innerHTML]="cardForm.backText"
+                 (input)="onEditorInput($event, 'backText', backEditor)"
+                 data-placeholder="Câu trả lời / nghĩa..."></div>
           </div>
           <div class="form-group">
             <label class="form-label">Tags (phân cách bằng dấu phẩy)</label>
             <input class="form-input" [(ngModel)]="cardTagsInput" placeholder="VD: grammar, unit1, verb" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nguồn tài liệu</label>
+            <input class="form-input" [(ngModel)]="cardForm.source"
+                   placeholder="VD: Unit 3 - English Grammar, Wikipedia: Photosynthesis..." />
           </div>
           <div class="modal-footer">
             <button class="btn-cancel" (click)="closeCardModal()">Hủy</button>
@@ -1163,7 +1290,7 @@ export class DeckComponent implements OnInit {
   savingCard     = signal(false);
   cardSaveError  = signal<string | null>(null);
   cardsLoadError = signal<string | null>(null);
-  cardForm       = { frontText: '', backText: '' };
+  cardForm       = { frontText: '', backText: '', source: '', contentFormat: 'plain' };
   cardTagsInput  = '';
 
   // AI generation modal
@@ -1451,14 +1578,19 @@ export class DeckComponent implements OnInit {
   // ── Card CRUD ─────────────────────────────────────────────────────────
   openCreateCard() {
     this.editingCard.set(null);
-    this.cardForm = { frontText: '', backText: '' };
+    this.cardForm = { frontText: '', backText: '', source: '', contentFormat: 'plain' };
     this.cardTagsInput = '';
     this.showCardModal.set(true);
   }
 
   openEditCard(card: Card) {
     this.editingCard.set(card);
-    this.cardForm = { frontText: card.frontText ?? '', backText: card.backText ?? '' };
+    this.cardForm = {
+      frontText: card.frontText ?? '',
+      backText: card.backText ?? '',
+      source: card.source ?? '',
+      contentFormat: card.contentFormat ?? 'plain',
+    };
     this.cardTagsInput = card.tags?.join(', ') ?? '';
     this.showCardModal.set(true);
   }
@@ -1474,6 +1606,8 @@ export class DeckComponent implements OnInit {
       frontText: this.cardForm.frontText.trim(),
       backText:  this.cardForm.backText.trim(),
       tags:      tags.length ? tags : undefined,
+      source:    this.cardForm.source?.trim() || undefined,
+      contentFormat: this.cardForm.contentFormat,
     };
     this.savingCard.set(true);
     const isEditing = !!this.editingCard();
@@ -1494,6 +1628,7 @@ export class DeckComponent implements OnInit {
     });
   }
 
+  // ── Rich Text Formatting ─────────────────────────────────────────────
   deleteCard(card: Card) {
     const deck = this.selectedDeck();
     if (!deck || !confirm('Xóa thẻ này?')) return;
@@ -1501,6 +1636,42 @@ export class DeckComponent implements OnInit {
       this.cards.update(list => list.filter(c => c.id !== card.id));
       this.svc.decks.update(list => list.map(d => d.id === deck.id ? {...d, cardCount: d.cardCount - 1} : d));
     });
+  }
+
+  formatText(format: string, event?: Event) {
+    const FONT_SIZE_MAP: Record<string, string> = {
+      small: '2', medium: '3', large: '4', xlarge: '5',
+    };
+    switch (format) {
+      case 'bold':      document.execCommand('bold', false); break;
+      case 'italic':    document.execCommand('italic', false); break;
+      case 'underline': document.execCommand('underline', false); break;
+      case 'strike':    document.execCommand('strikeThrough', false); break;
+      case 'fontSize': {
+        const val = (event!.target as HTMLSelectElement).value;
+        if (val) document.execCommand('fontSize', false, FONT_SIZE_MAP[val] ?? '3');
+        break;
+      }
+      case 'color': {
+        const val = (event!.target as HTMLInputElement).value;
+        if (val) document.execCommand('foreColor', false, val);
+        break;
+      }
+      case 'highlight': {
+        const val = (event!.target as HTMLInputElement).value;
+        if (val) document.execCommand('hiliteColor', false, val);
+        break;
+      }
+    }
+  }
+
+  onEditorInput(event: Event, field: 'frontText' | 'backText', editorEl: HTMLElement) {
+    this.cardForm[field] = editorEl.innerHTML;
+    // Auto-set contentFormat to html if any tag detected
+    if (!this.cardForm.contentFormat || this.cardForm.contentFormat === 'plain') {
+      const hasHtml = /<[^>]+>/.test(editorEl.innerHTML);
+      if (hasHtml) this.cardForm.contentFormat = 'html';
+    }
   }
 
   // ── AI Generation ─────────────────────────────────────────────────────

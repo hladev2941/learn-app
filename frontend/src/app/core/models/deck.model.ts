@@ -44,6 +44,8 @@ export interface Card {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  source?: string | null;
+  contentFormat?: string;
 }
 
 export interface ReviewRequest {

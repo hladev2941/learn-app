@@ -19,7 +19,9 @@ public record CardResponse(
         LocalDate lastReviewDate,
         List<String> tags,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String source,
+        String contentFormat
 ) {
     public static CardResponse from(Card card) {
         return new CardResponse(
@@ -34,7 +36,9 @@ public record CardResponse(
                 card.getLastReviewDate(),
                 card.getTags().stream().map(t -> t.getName()).toList(),
                 card.getCreatedAt(),
-                card.getUpdatedAt()
+                card.getUpdatedAt(),
+                card.getSource(),
+                card.getContentFormat()
         );
     }
 }

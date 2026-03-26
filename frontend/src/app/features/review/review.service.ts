@@ -13,6 +13,8 @@ export interface ReviewCard {
   fsrsState: number;
   nextReviewDate?: string;
   tags: string[];
+  source?: string | null;
+  contentFormat?: string;
 }
 
 interface ApiResponse<T> { success: boolean; data: T; message?: string; }

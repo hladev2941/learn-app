@@ -1,4 +1,7 @@
 # 📚 Learning Support App - Product Specification
+> **Cập nhật: 2026-03-26** — Đã hoàn thành Auth, Deck/Subject/Card, Rich Text Card, Review page
+
+
 
 ## 1. Overview
 Ứng dụng hỗ trợ học tập tập trung vào việc xây dựng thói quen, tăng hiệu suất học và cá nhân hóa trải nghiệm thông qua gamification (phần thưởng), tracking và phân tích dữ liệu học tập.
@@ -63,13 +66,15 @@
 ## 3. Learning Support Features
 
 ### 3.1 Flashcard System
-- Tạo thẻ học (text, image)
+- Tạo thẻ học (text, **rich text HTML**, image)
 - Phân loại theo:
   - Chủ đề
   - Tag
 - Học theo:
   - Random
   - Spaced Repetition
+- ✅ Rich Text: toolbar B/I/U/S + font size + màu chữ + màu nền (2026-03-26)
+- ✅ Nguồn tài liệu: trường `source` + badge hiển thị (2026-03-26)
 
 ### 3.2 Spaced Repetition (Ôn tập thông minh)
 - Gợi ý thời gian ôn lại:

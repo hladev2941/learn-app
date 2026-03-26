@@ -1,6 +1,6 @@
 # LearnApp — Ghi chú tiến độ
 
-> Cập nhật lần cuối: 2026-03-25 (session 5)
+> Cập nhật lần cuối: 2026-03-26 (session 6)
 
 ---
 
@@ -14,6 +14,11 @@
 | Auth flow (register/login) | ✅ Hoạt động end-to-end |
 | Subject (Môn học) | ✅ Backend + Frontend hoàn chỉnh |
 | Deck + Card feature | ✅ Backend + Frontend hoàn chỉnh |
+| Card — Rich Text Formatting | ✅ Toolbar B/I/U/S + font size + màu chữ + màu nền |
+| Card — Nguồn tài liệu | ✅ Trường `source` + badge hiển thị trong card list |
+| Card — HTML Content | ✅ Backend `contentFormat` field + Frontend `DomSanitizer` render |
+| Review — HTML Render | ✅ Safe HTML via `DomSanitizer.bypassSecurityTrustHtml()` |
+| Card Modal | ✅ Modal rộng 640px, max 90vh, editor cuộn được |
 | Notification per Subject | ✅ Config lưu DB, scheduler Phase 2 |
 | WebSocket Notification | ✅ STOMP/SockJS, OnlineRegistry, SubjectReminder + StreakWarning scheduler |
 | Notification Top Bar   | ✅ Ticker cuộn ngang + Bell icon/badge + Panel list có navigate |
@@ -167,6 +172,8 @@ docker compose up -d
 ### Backend
 - [x] `SubjectController` — CRUD môn học + reminder config ✅
 - [x] `CardController` — CRUD cho card trong deck ✅
+- [x] Card entity + DTO — thêm `source` + `contentFormat` ✅
+- [x] `CardServiceImpl` — set `source`, `contentFormat` trong create/update ✅
 - [ ] AI service trong `flashcard-service` — generate card từ Claude API (WebClient)
 - [ ] `StudySessionController` — bắt đầu/kết thúc session học
 - [ ] FSRS algorithm implementation — schedule review
@@ -190,7 +197,11 @@ docker compose up -d
 
 ### Frontend
 - [x] **Deck page** — Subject (môn học) → Deck → Card, 2-level nav, reminder config ✅
-- [ ] **Review page** — flip card UI, FSRS rating buttons (Again/Hard/Good/Easy)
+- [x] **Card editor** — rich text toolbar (B/I/U/S/fontSize/color/highlight) ✅
+- [x] **Card modal** — rộng 640px, max 90vh, editor cuộn được ✅
+- [x] **Card source field** — input + badge hiển thị trong list ✅
+- [x] **Review page** — HTML safe render via DomSanitizer ✅
+- [ ] **Review page** — flip card UI hoàn chỉnh với rich text
 - [ ] **Timer page** — Pomodoro timer (25/5 phút), tích hợp study session
 - [ ] **Analytics page** — charts: streak calendar, XP over time, cards reviewed
 - [ ] **Settings page** — đổi display name, timezone, password

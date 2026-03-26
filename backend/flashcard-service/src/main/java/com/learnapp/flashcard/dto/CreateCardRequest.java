@@ -12,5 +12,7 @@ public record CreateCardRequest(
         String frontImageUrl,
         @NotBlank String backText,
         String backImageUrl,
-        List<String> tags
+        List<String> tags,
+        String source,
+        String contentFormat
 ) {}

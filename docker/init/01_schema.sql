@@ -220,7 +220,9 @@ CREATE TABLE flashcard.cards (
     next_review_date    DATE,
     last_review_date    DATE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    source              VARCHAR(500),
+    content_format      VARCHAR(20) NOT NULL DEFAULT 'plain'
 );
 
 CREATE INDEX idx_flashcard_cards_user        ON flashcard.cards(user_id);

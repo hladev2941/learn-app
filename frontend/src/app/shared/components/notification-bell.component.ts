@@ -1,4 +1,4 @@
-import { Component, inject, signal, HostListener } from '@angular/core';
+import { Component, inject, signal, HostListener, ElementRef } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
@@ -7,8 +7,8 @@ import { NotificationService, AppNotification } from '../../core/services/notifi
 /** Route to navigate to when clicking a notification by type */
 const ROUTE_MAP: Record<string, string> = {
   SUBJECT_REMINDER: '/deck',
-  STREAK_WARNING:   '/dashboard',
-  REVIEW_DUE:       '/review',
+  STREAK_WARNING: '/dashboard',
+  REVIEW_DUE: '/review',
 };
 
 @Component({
@@ -17,9 +17,8 @@ const ROUTE_MAP: Record<string, string> = {
   imports: [MatIconModule, DatePipe],
   template: `
     <div class="bell-wrapper">
-
       <!-- Bell button -->
-      <button class="bell-btn" (click)="toggle()" title="Thông báo">
+      <button class="bell-btn" (click)="toggle($event)" title="Thông báo">
         <mat-icon>notifications</mat-icon>
         @if (notifService.unreadCount() > 0) {
           <span class="badge">
@@ -31,7 +30,6 @@ const ROUTE_MAP: Record<string, string> = {
       <!-- Notification panel -->
       @if (open()) {
         <div class="panel glass-panel" (click)="$event.stopPropagation()">
-
           <!-- Header -->
           <div class="panel-header">
             <div class="panel-title-row">
@@ -78,7 +76,6 @@ const ROUTE_MAP: Record<string, string> = {
               </div>
             }
           </div>
-
         </div>
       }
     </div>
@@ -86,7 +83,6 @@ const ROUTE_MAP: Record<string, string> = {
   styles: [`
     .bell-wrapper { position: relative; display: inline-flex; }
 
-    /* ── Bell button ── */
     .bell-btn {
       position: relative;
       display: flex; align-items: center; justify-content: center;
@@ -104,7 +100,6 @@ const ROUTE_MAP: Record<string, string> = {
     }
     .bell-btn mat-icon { font-size: 22px; width: 22px; height: 22px; }
 
-    /* ── Badge ── */
     .badge {
       position: absolute; top: -4px; right: -4px;
       min-width: 18px; height: 18px; padding: 0 5px;
@@ -122,15 +117,24 @@ const ROUTE_MAP: Record<string, string> = {
       100% { transform: scale(1); }
     }
 
-    /* ── Panel ── */
     .panel {
-      position: absolute;
-      top: calc(100% + 10px); right: 0;
-      width: 360px; max-height: 480px;
+      position: fixed;
+      top: 60px;
+      right: 16px;
+      width: min(380px, calc(100vw - 24px));
+      max-height: min(520px, calc(100vh - 80px));
       display: flex; flex-direction: column;
       border-radius: 20px; overflow: hidden;
-      z-index: 200;
+      z-index: 1200;
       animation: panel-in 0.2s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @media (max-width: 767px) {
+      .panel {
+        top: 64px;
+        right: 8px;
+        width: calc(100vw - 16px);
+        max-height: calc(100vh - 80px);
+      }
     }
     @keyframes panel-in {
       0% { opacity: 0; transform: translateY(-8px) scale(0.97); }
@@ -144,15 +148,12 @@ const ROUTE_MAP: Record<string, string> = {
       box-shadow: 0 16px 48px rgba(99,102,241,0.18), 0 4px 16px rgba(0,0,0,0.06);
     }
 
-    /* ── Panel header ── */
     .panel-header {
       padding: 16px 16px 12px;
       border-bottom: 1px solid rgba(199,210,254,0.35);
       flex-shrink: 0;
     }
-    .panel-title-row {
-      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
-    }
+    .panel-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .panel-icon { font-size: 18px; width: 18px; height: 18px; color: #6366f1; }
     .panel-title { font-size: 1rem; font-weight: 700; color: #1e1b4b; flex: 1; }
     .unread-chip {
@@ -171,13 +172,11 @@ const ROUTE_MAP: Record<string, string> = {
     }
     .mark-read-btn:hover { background: rgba(99,102,241,0.1); }
 
-    /* ── List ── */
     .panel-list { overflow-y: auto; flex: 1; }
     .panel-list::-webkit-scrollbar { width: 4px; }
     .panel-list::-webkit-scrollbar-track { background: transparent; }
     .panel-list::-webkit-scrollbar-thumb { background: rgba(199,210,254,0.6); border-radius: 4px; }
 
-    /* ── Notification item ── */
     .notif-item {
       display: flex; align-items: flex-start; gap: 12px;
       padding: 14px 16px;
@@ -226,7 +225,6 @@ const ROUTE_MAP: Record<string, string> = {
       transition: all 0.18s;
     }
 
-    /* ── Empty state ── */
     .empty-state {
       display: flex; flex-direction: column; align-items: center;
       padding: 40px 20px; gap: 6px;
@@ -239,15 +237,21 @@ const ROUTE_MAP: Record<string, string> = {
 export class NotificationBellComponent {
   protected notifService = inject(NotificationService);
   private router = inject(Router);
+  private hostRef = inject(ElementRef<HTMLElement>);
   protected open = signal(false);
 
   /** Close panel when clicking outside */
-  @HostListener('document:click')
-  onDocumentClick(): void {
-    this.open.set(false);
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as Node | null;
+    if (!target) return;
+    if (!this.hostRef.nativeElement.contains(target)) {
+      this.open.set(false);
+    }
   }
 
-  protected toggle(): void {
+  protected toggle(event: MouseEvent): void {
+    event.stopPropagation();
     this.open.update(v => !v);
   }
 
@@ -261,8 +265,8 @@ export class NotificationBellComponent {
   protected getIcon(type: string): string {
     const icons: Record<string, string> = {
       SUBJECT_REMINDER: '📚',
-      STREAK_WARNING:   '🔥',
-      REVIEW_DUE:       '🃏',
+      STREAK_WARNING: '🔥',
+      REVIEW_DUE: '🃏',
     };
     return icons[type] ?? '🔔';
   }

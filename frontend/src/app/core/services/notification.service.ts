@@ -1,4 +1,5 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { AuthService } from './auth.service';
@@ -13,9 +14,12 @@ export interface AppNotification {
   isRead: boolean;
 }
 
+interface ApiResponse<T> { success: boolean; data: T; }
+
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private authService = inject(AuthService);
+  private http = inject(HttpClient);
 
   private _notifications = signal<AppNotification[]>([]);
   readonly notifications = this._notifications.asReadonly();
@@ -51,7 +55,30 @@ export class NotificationService {
     this._toast.set(null);
   }
 
+  /** Fetch existing notifications from server. */
+  fetchNotifications(): void {
+    const token = this.authService.getAccessToken();
+    if (!token) return;
+
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+    this.http.get<ApiResponse<AppNotification[]>>(`${environment.apiUrl}/notifications`, { headers })
+      .subscribe({
+        next: res => {
+          this._notifications.set(res.data ?? []);
+          console.debug('[Notif] Loaded', res.data?.length ?? 0, 'notifications from server');
+        },
+        error: err => console.warn('[Notif] Failed to load notifications', err),
+      });
+  }
+
   markAllRead(): void {
+    const token = this.authService.getAccessToken();
+    if (!token) return;
+
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+    this.http.patch<void>(`${environment.apiUrl}/notifications/read-all`, {}, { headers })
+      .subscribe({ error: err => console.warn('[Notif] markAllRead failed', err) });
+
     this._notifications.update(list => list.map(n => ({ ...n, isRead: true })));
   }
 
@@ -66,10 +93,18 @@ export class NotificationService {
   }
 
   private onConnected(): void {
-    console.debug('[WS] Connected — subscribing to notifications');
+    console.debug('[WS] Connected — fetching existing notifications + subscribing');
+    // Load existing notifications from server
+    this.fetchNotifications();
+
+    // Subscribe to real-time notifications
     this.client?.subscribe('/user/queue/notifications', msg => {
       const notification: AppNotification = { ...JSON.parse(msg.body), isRead: false };
-      this._notifications.update(list => [notification, ...list].slice(0, 50));
+      // Avoid duplicates if backend also persists via WS
+      this._notifications.update(list => {
+        if (list.some(n => n.id === notification.id)) return list;
+        return [notification, ...list].slice(0, 50);
+      });
       // Show toast then clear after 5 seconds
       this._toast.set(notification);
       setTimeout(() => this._toast.set(null), 5000);

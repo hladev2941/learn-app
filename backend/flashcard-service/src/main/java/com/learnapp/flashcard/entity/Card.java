@@ -77,4 +77,11 @@ public class Card {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    @Column(name = "source", length = 500)
+    private String source;
+
+    @Column(name = "content_format", length = 20)
+    @Builder.Default
+    private String contentFormat = "plain"; // "plain" | "html"
 }

@@ -1,6 +1,7 @@
 import {
   Component, inject, signal, computed, OnInit, OnDestroy, HostListener
 } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MatIconModule } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -460,7 +461,7 @@ interface ApiResponse<T> { success: boolean; data: T; }
               <!-- Front -->
               <div class="flip-face front">
                 <span class="face-label front-lbl">Câu hỏi</span>
-                <p class="card-text">{{ currentCard()!.frontText }}</p>
+                <div class="card-text" [innerHTML]="safeContent(currentCard()!.frontText, currentCard()!.contentFormat)"></div>
                 @if (!flipped()) {
                   <div class="hint-tap">
                     <mat-icon>touch_app</mat-icon>
@@ -472,7 +473,7 @@ interface ApiResponse<T> { success: boolean; data: T; }
               <!-- Back -->
               <div class="flip-face back">
                 <span class="face-label back-lbl">Đáp án</span>
-                <p class="card-text">{{ currentCard()!.backText }}</p>
+                <div class="card-text" [innerHTML]="safeContent(currentCard()!.backText, currentCard()!.contentFormat)"></div>
               </div>
 
             </div>
@@ -547,6 +548,7 @@ export class ReviewComponent implements OnInit, OnDestroy {
   private reviewService = inject(ReviewService);
   private router = inject(Router);
   private http = inject(HttpClient);
+  private sanitizer = inject(DomSanitizer);
 
   protected loading = signal(true);
   protected cards = signal<ReviewCard[]>([]);
@@ -643,6 +645,14 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
   protected flip(): void {
     this.flipped.set(true);
+  }
+
+  // Safe HTML render for rich text cards
+  safeContent(text: string | null | undefined, format: string | null | undefined): SafeHtml {
+    if (format === 'html' && text) {
+      return this.sanitizer.bypassSecurityTrustHtml(text);
+    }
+    return (text ?? '') as SafeHtml;
   }
 
   protected rate(rating: Rating): void {

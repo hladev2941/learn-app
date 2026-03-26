@@ -30,6 +30,8 @@ export interface CreateCardRequest {
   backText: string;
   backImageUrl?: string;
   tags?: string[];
+  source?: string;
+  contentFormat?: string;
 }
 
 export interface GeneratedCard {

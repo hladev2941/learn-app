@@ -2,6 +2,7 @@ package com.learnapp.notification.config;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,7 +30,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     private final SecretKey signingKey;
 
     public WebSocketAuthInterceptor(@Value("${jwt.secret}") String jwtSecret) {
-        this.signingKey = Keys.hmacShaKeyFor(hexToBytes(jwtSecret));
+        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
     }
 
     @Override
@@ -65,13 +66,4 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         return message;
     }
 
-    private static byte[] hexToBytes(String hex) {
-        int len = hex.length();
-        byte[] data = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
-                    + Character.digit(hex.charAt(i + 1), 16));
-        }
-        return data;
-    }
 }

@@ -11,6 +11,9 @@ export interface Subject {
   reminderTime: string | null;
   reminderDays: string[];
   deckCount: number;
+  totalCardCount: number;
+  dueCardCount: number;
+  masteredCardCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,6 +25,8 @@ export interface Deck {
   description: string | null;
   coverColor: string;
   cardCount: number;
+  dueCardCount: number;
+  masteredCardCount: number;
   createdAt: string;
   updatedAt: string;
 }

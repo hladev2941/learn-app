@@ -27,6 +27,7 @@ public class CardServiceImpl {
     private final DeckRepository deckRepository;
     private final TagRepository tagRepository;
 
+    @Transactional(readOnly = true)
     public List<CardResponse> getCardsByDeck(UUID deckId, UUID userId) {
         return cardRepository.findByDeck_IdAndUserId(deckId, userId)
                 .stream().map(CardResponse::from).toList();

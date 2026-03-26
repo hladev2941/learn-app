@@ -22,4 +22,11 @@ public interface StudySessionRepository extends JpaRepository<StudySession, UUID
 
     @Query("SELECT s.studyDate, COALESCE(SUM(s.durationSecs), 0) FROM StudySession s WHERE s.userId = :userId AND s.studyDate BETWEEN :from AND :to AND s.completed = true GROUP BY s.studyDate ORDER BY s.studyDate")
     List<Object[]> findDailyStudyStats(UUID userId, LocalDate from, LocalDate to);
+
+    @Query("SELECT s.studyDate, COUNT(s) FROM StudySession s WHERE s.userId = :userId AND s.studyDate BETWEEN :from AND :to AND s.completed = true GROUP BY s.studyDate ORDER BY s.studyDate")
+    List<Object[]> findDailySessionCount(UUID userId, LocalDate from, LocalDate to);
+
+    long countByUserId(UUID userId);
+
+    long countByUserIdAndSessionType(UUID userId, String sessionType);
 }

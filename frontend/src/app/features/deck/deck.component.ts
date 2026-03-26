@@ -1,10 +1,11 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { RouterLink } from '@angular/router';
 import { Card, Deck, Subject } from '../../core/models/deck.model';
-import { CreateCardRequest, CreateDeckRequest, CreateSubjectRequest, DeckService } from './deck.service';
+import { CreateCardRequest, CreateDeckRequest, CreateSubjectRequest, DeckService, GeneratedCard } from './deck.service';
 
 // ─── Constants ───────────────────────────────────────────────
 const DECK_COLORS = [
@@ -19,6 +20,15 @@ const DAYS = [
 ];
 const STATE_LABELS  = ['Mới', 'Đang học', 'Ôn tập', 'Học lại'];
 const STATE_CLASSES = ['state-new', 'state-learning', 'state-review', 'state-relearn'];
+const SUBJECT_EMOJIS = ['📚','🧮','🌍','🔬','🎨','💻','🎵','📖','✏️','🏛️','⚗️','🌱'];
+const REMINDER_TYPES = [
+  { key: 'MINUTES', label: 'Phút' },
+  { key: 'HOURS',   label: 'Giờ' },
+  { key: 'DAILY',   label: 'Hằng ngày' },
+  { key: 'WEEKLY',  label: 'Hằng tuần' },
+];
+const MINUTE_OPTIONS = [15, 30, 45, 60, 90, 120];
+const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
 
 // ─── Styles ──────────────────────────────────────────────────
 const S = `
@@ -30,7 +40,7 @@ const S = `
 /* ── Header ── */
 .page-header {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; margin-bottom: 28px; flex-wrap: wrap;
+  gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
 }
 .hd-left { display: flex; align-items: center; gap: 12px; }
 .back-btn {
@@ -52,6 +62,7 @@ const S = `
 .breadcrumb  { display: flex; align-items: center; gap: 6px; font-size: .8125rem; color: #94a3b8; }
 .breadcrumb-sep { color: #c7d2fe; }
 .breadcrumb-active { color: #1e1b4b; font-weight: 600; }
+.hd-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* ── Buttons ── */
 .btn-brand {
@@ -68,7 +79,7 @@ const S = `
   background: rgba(255,255,255,0.6); color: #475569;
   border: 1.5px solid rgba(199,210,254,0.8); border-radius: 10px;
   padding: 8px 14px; font-size: .8125rem; font-weight: 500;
-  cursor: pointer; transition: background .15s;
+  cursor: pointer; transition: background .15s; text-decoration: none;
 }
 .btn-ghost:hover { background: rgba(255,255,255,.95); }
 .btn-ghost mat-icon { font-size: 16px; width: 16px; height: 16px; }
@@ -80,6 +91,61 @@ const S = `
 }
 .btn-icon:hover { background: rgba(99,102,241,.1); color: #6366f1; }
 .btn-icon mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.btn-review {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: linear-gradient(135deg,#10b981,#34d399); color: white;
+  border: none; border-radius: 8px; padding: 6px 12px;
+  font-size: .75rem; font-weight: 700; cursor: pointer;
+  text-decoration: none; transition: opacity .15s, transform .1s;
+}
+.btn-review:hover { opacity: .9; transform: translateY(-1px); }
+.btn-review mat-icon { font-size: 14px; width: 14px; height: 14px; }
+
+/* ── Search & Sort bar ── */
+.toolbar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.search-wrap {
+  flex: 1; min-width: 200px; position: relative;
+}
+.search-icon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  color: #94a3b8; font-size: 18px; width: 18px; height: 18px; pointer-events: none;
+}
+.search-input {
+  width: 100%; padding: 9px 12px 9px 36px;
+  background: rgba(255,255,255,.72); backdrop-filter: blur(16px);
+  border: 1.5px solid rgba(199,210,254,.7); border-radius: 12px;
+  font-size: .875rem; color: #1e1b4b; outline: none;
+  transition: border-color .15s;
+}
+.search-input:focus { border-color: #6366f1; }
+.search-input::placeholder { color: #cbd5e1; }
+.sort-select {
+  padding: 9px 12px; border-radius: 12px;
+  background: rgba(255,255,255,.72); border: 1.5px solid rgba(199,210,254,.7);
+  font-size: .8125rem; color: #475569; outline: none; cursor: pointer;
+}
+.sort-select:focus { border-color: #6366f1; }
+
+/* ── Overview stats bar ── */
+.stats-bar {
+  display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.stat-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,.72); backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,.85); border-radius: 12px;
+  padding: 10px 16px; font-size: .8125rem; font-weight: 600;
+  box-shadow: 0 2px 10px rgba(99,102,241,.05);
+}
+.stat-chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.stat-chip-val { font-size: 1rem; font-weight: 700; }
+.chip-total { color: #6366f1; }
+.chip-due   { color: #ef4444; }
+.chip-master{ color: #10b981; }
+.chip-new   { color: #f59e0b; }
 
 /* ── Glass ── */
 .glass {
@@ -91,12 +157,11 @@ const S = `
 
 /* ── Subject grid ── */
 .subject-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr));
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr));
   gap: 16px; margin-bottom: 8px;
 }
 .subject-card {
-  background: rgba(255,255,255,.72);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  background: rgba(255,255,255,.72); backdrop-filter: blur(20px);
   border: 1px solid rgba(255,255,255,.85); border-radius: 22px;
   box-shadow: 0 4px 20px rgba(99,102,241,.07);
   overflow: hidden; cursor: pointer;
@@ -106,25 +171,45 @@ const S = `
 .subject-card:hover { transform: translateY(-4px); box-shadow: 0 10px 36px rgba(99,102,241,.14); }
 
 .subject-cover {
-  height: 80px; display: flex; align-items: center; justify-content: center;
-  font-size: 2.25rem; position: relative; flex-shrink: 0;
+  height: 72px; display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; position: relative; flex-shrink: 0;
 }
 .subject-cover-overlay {
-  position: absolute; inset: 0; opacity: .18;
+  position: absolute; inset: 0; opacity: .15;
   background: repeating-linear-gradient(45deg, rgba(255,255,255,.3) 0, rgba(255,255,255,.3) 1px, transparent 0, transparent 50%);
   background-size: 10px 10px;
 }
 
-.subject-body { padding: 14px 16px; flex: 1; }
-.subject-name { font-size: .9375rem; font-weight: 700; color: #1e1b4b; margin: 0 0 4px; }
-.subject-meta {
-  display: flex; align-items: center; gap: 5px;
-  font-size: .75rem; color: #6366f1; font-weight: 600;
+.subject-body { padding: 12px 14px 8px; flex: 1; }
+.subject-name { font-size: .9375rem; font-weight: 700; color: #1e1b4b; margin: 0 0 6px; }
+.subject-meta-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
 }
-.subject-meta mat-icon { font-size: 13px; width: 13px; height: 13px; }
+.subject-meta-item {
+  display: flex; align-items: center; gap: 3px;
+  font-size: .72rem; color: #64748b; font-weight: 500;
+}
+.subject-meta-item mat-icon { font-size: 12px; width: 12px; height: 12px; }
+.due-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: rgba(239,68,68,.1); color: #ef4444;
+  font-size: .72rem; font-weight: 700; border-radius: 100px; padding: 2px 8px;
+}
+.due-badge mat-icon { font-size: 11px; width: 11px; height: 11px; }
+
+/* Progress bar */
+.progress-wrap { margin-bottom: 10px; }
+.progress-label { display: flex; justify-content: space-between; font-size: .7rem; color: #94a3b8; margin-bottom: 4px; }
+.progress-track {
+  height: 5px; background: rgba(99,102,241,.1); border-radius: 100px; overflow: hidden;
+}
+.progress-fill {
+  height: 100%; background: linear-gradient(90deg,#10b981,#34d399);
+  border-radius: 100px; transition: width .5s ease;
+}
 
 .subject-footer {
-  display: flex; align-items: center; padding: 8px 12px;
+  display: flex; align-items: center; padding: 8px 10px;
   border-top: 1px solid rgba(99,102,241,.06); gap: 4px;
 }
 .subject-footer-spacer { flex: 1; }
@@ -139,11 +224,10 @@ const S = `
 /* ── Deck grid ── */
 .deck-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr));
-  gap: 14px; margin-bottom: 24px;
+  gap: 14px; margin-bottom: 20px;
 }
 .deck-card {
-  background: rgba(255,255,255,.72);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  background: rgba(255,255,255,.72); backdrop-filter: blur(20px);
   border: 1px solid rgba(255,255,255,.85); border-radius: 18px;
   box-shadow: 0 3px 14px rgba(99,102,241,.06);
   overflow: hidden; cursor: pointer;
@@ -155,19 +239,27 @@ const S = `
   border-color: rgba(99,102,241,.4);
   box-shadow: 0 0 0 2px rgba(99,102,241,.15), 0 8px 28px rgba(99,102,241,.12);
 }
-.deck-cover { height: 5px; }
+.deck-cover { height: 6px; }
 .deck-body   { padding: 14px; flex: 1; }
 .deck-name   { font-size: .875rem; font-weight: 700; color: #1e1b4b; margin: 0 0 3px; }
-.deck-desc   { font-size: .75rem; color: #94a3b8; margin: 0 0 8px; line-height: 1.4; }
-.deck-meta   { display: flex; align-items: center; gap: 5px; font-size: .75rem; color: #6366f1; font-weight: 600; }
-.deck-meta mat-icon { font-size: 13px; width: 13px; height: 13px; }
-.deck-footer { display: flex; align-items: center; padding: 6px 10px; border-top: 1px solid rgba(99,102,241,.06); }
+.deck-desc   { font-size: .75rem; color: #94a3b8; margin: 0 0 8px; line-height: 1.4;
+               max-height: 2.6em; overflow: hidden; }
+.deck-chips  { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.deck-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: .72rem; font-weight: 600;
+  border-radius: 100px; padding: 2px 8px;
+}
+.deck-chip mat-icon { font-size: 11px; width: 11px; height: 11px; }
+.chip-cards  { background: rgba(99,102,241,.08); color: #6366f1; }
+.chip-due2   { background: rgba(239,68,68,.1); color: #ef4444; }
+.chip-mastered { background: rgba(16,185,129,.1); color: #10b981; }
+.deck-footer { display: flex; align-items: center; padding: 6px 10px; border-top: 1px solid rgba(99,102,241,.06); gap: 4px; }
 .deck-footer-spacer { flex: 1; }
 
 /* ── Card list panel ── */
 .card-panel {
-  background: rgba(255,255,255,.72);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  background: rgba(255,255,255,.72); backdrop-filter: blur(20px);
   border: 1px solid rgba(255,255,255,.85); border-radius: 20px;
   box-shadow: 0 4px 20px rgba(99,102,241,.07); overflow: hidden;
 }
@@ -180,21 +272,74 @@ const S = `
 .panel-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .panel-name { font-size: .9375rem; font-weight: 700; color: #1e1b4b; }
 .panel-count { font-size: .75rem; color: #94a3b8; }
-.panel-header-right { display: flex; gap: 6px; }
+.panel-header-right { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* Card search bar */
+.card-search-wrap { padding: 10px 14px 0; }
+.card-search {
+  width: 100%; padding: 8px 12px 8px 36px;
+  background: rgba(248,250,252,.9); border: 1.5px solid rgba(199,210,254,.6);
+  border-radius: 10px; font-size: .8125rem; color: #1e1b4b; outline: none;
+  transition: border-color .15s;
+}
+.card-search:focus { border-color: #6366f1; }
+.card-search::placeholder { color: #cbd5e1; }
+.card-search-icon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  color: #94a3b8; font-size: 16px; width: 16px; height: 16px; pointer-events: none;
+}
+.card-search-container { position: relative; }
+
+/* Sort chips */
+.card-sort-row { display: flex; gap: 6px; padding: 10px 14px 0; flex-wrap: wrap; }
+.sort-chip {
+  padding: 4px 12px; border-radius: 100px; font-size: .72rem; font-weight: 600;
+  border: 1.5px solid rgba(199,210,254,.6); background: transparent; color: #94a3b8;
+  cursor: pointer; transition: all .15s;
+}
+.sort-chip.active { background: rgba(99,102,241,.1); color: #6366f1; border-color: rgba(99,102,241,.3); }
+
 .card-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Flash card item */
 .flash-card {
   background: rgba(248,250,252,.85); border: 1px solid rgba(199,210,254,.5);
-  border-radius: 13px; padding: 12px 14px;
-  display: flex; align-items: flex-start; gap: 10px;
+  border-radius: 14px; overflow: hidden;
+  transition: box-shadow .15s;
 }
-.flash-card:hover { background: rgba(255,255,255,.95); }
+.flash-card:hover { box-shadow: 0 3px 14px rgba(99,102,241,.1); }
+.flash-card-header {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; cursor: pointer;
+}
 .flash-content { flex: 1; min-width: 0; }
 .flash-front { font-size: .8125rem; font-weight: 600; color: #1e1b4b; margin-bottom: 3px; }
-.flash-back  { font-size: .75rem; color: #64748b; line-height: 1.4; }
+.flash-back-preview { font-size: .75rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .flash-tags  { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
 .tag-pill { font-size: .6875rem; font-weight: 600; color: #6366f1; background: rgba(99,102,241,.1); border-radius: 100px; padding: 1px 7px; }
-.flash-actions { display: flex; gap: 2px; flex-shrink: 0; }
-.state-badge { font-size: .625rem; font-weight: 700; border-radius: 100px; padding: 2px 7px; flex-shrink: 0; align-self: flex-start; }
+.flash-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.flash-actions { display: flex; gap: 2px; }
+
+/* Expanded card back */
+.flash-back-full {
+  border-top: 1px solid rgba(199,210,254,.4);
+  padding: 10px 14px 12px;
+  background: rgba(241,245,249,.5);
+  font-size: .8125rem; color: #475569; line-height: 1.5;
+}
+.back-label { font-size: .7rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+
+/* Next review badge */
+.review-date-badge {
+  font-size: .65rem; font-weight: 700; border-radius: 100px; padding: 2px 7px;
+  white-space: nowrap;
+}
+.review-due    { background: rgba(239,68,68,.1); color: #ef4444; }
+.review-today  { background: rgba(245,158,11,.1); color: #d97706; }
+.review-soon   { background: rgba(99,102,241,.08); color: #6366f1; }
+.review-later  { background: rgba(100,116,139,.08); color: #94a3b8; }
+
+.state-badge { font-size: .625rem; font-weight: 700; border-radius: 100px; padding: 2px 7px; flex-shrink: 0; }
 .state-new      { background: rgba(99,102,241,.1); color: #6366f1; }
 .state-learning { background: rgba(245,158,11,.1); color: #d97706; }
 .state-review   { background: rgba(16,185,129,.1); color: #059669; }
@@ -218,12 +363,12 @@ const S = `
 }
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 .modal {
-  background: rgba(255,255,255,.97);
-  backdrop-filter: blur(24px);
+  background: rgba(255,255,255,.97); backdrop-filter: blur(24px);
   border: 1px solid rgba(255,255,255,.9); border-radius: 24px;
   box-shadow: 0 20px 60px rgba(30,27,75,.18);
   padding: 28px; width: 100%; max-width: 480px;
   animation: slideUp .2s cubic-bezier(.4,0,.2,1);
+  max-height: 90vh; overflow-y: auto;
 }
 @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
 .modal-wide { max-width: 520px; }
@@ -243,7 +388,6 @@ const S = `
 }
 .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: #6366f1; }
 .form-textarea { resize: vertical; min-height: 68px; }
-
 .form-row { display: flex; gap: 10px; }
 .form-row .form-group { flex: 1; }
 
@@ -308,11 +452,9 @@ const S = `
 .reminder-tab {
   flex: 1; padding: 6px 4px; border-radius: 8px; border: none;
   font-size: .75rem; font-weight: 600; color: #94a3b8;
-  background: transparent; cursor: pointer; transition: all .15s;
-  text-align: center;
+  background: transparent; cursor: pointer; transition: all .15s; text-align: center;
 }
 .reminder-tab.active { background: white; color: #6366f1; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-
 .reminder-section {
   background: rgba(99,102,241,.04); border: 1px solid rgba(99,102,241,.1);
   border-radius: 14px; padding: 14px; margin-top: 4px;
@@ -333,26 +475,60 @@ const S = `
 }
 .btn-submit:hover { opacity: .9; }
 .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── AI Button ── */
+.btn-ai {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg,#7c3aed,#a855f7); color: white;
+  border: none; border-radius: 12px; padding: 10px 18px;
+  font-size: .875rem; font-weight: 600; cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.btn-ai:hover { opacity: .9; transform: translateY(-1px); }
+.btn-ai mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.btn-ai:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+/* ── AI Modal ── */
+.modal-ai { max-width: 560px; }
+.ai-result-list { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; margin-top: 4px; padding-right: 4px; }
+.ai-result-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: rgba(248,250,252,.9); border: 1px solid rgba(199,210,254,.5);
+  border-radius: 12px; padding: 10px 12px; cursor: pointer; transition: background .12s;
+}
+.ai-result-item:hover { background: rgba(237,233,254,.6); }
+.ai-result-item.selected { border-color: rgba(124,58,237,.4); background: rgba(237,233,254,.5); }
+.ai-result-checkbox { flex-shrink: 0; width: 18px; height: 18px; accent-color: #7c3aed; margin-top: 2px; cursor: pointer; }
+.ai-result-content { flex: 1; min-width: 0; }
+.ai-result-front { font-size: .8125rem; font-weight: 600; color: #1e1b4b; margin-bottom: 3px; }
+.ai-result-back  { font-size: .75rem; color: #64748b; line-height: 1.4; }
+.ai-error {
+  background: rgba(254,226,226,.8); border: 1px solid rgba(252,165,165,.5);
+  border-radius: 10px; padding: 10px 14px; font-size: .8125rem; color: #dc2626; margin-top: 8px;
+}
+.ai-count-label { font-size: .8125rem; color: #64748b; margin: 0 0 6px; }
+.ai-spinner-row { display: flex; align-items: center; gap: 10px; padding: 24px 0; justify-content: center; }
+.ai-spinner-text { font-size: .875rem; color: #7c3aed; font-weight: 500; }
+.btn-ai-submit {
+  background: linear-gradient(135deg,#7c3aed,#a855f7); color: white;
+  border: none; border-radius: 10px; padding: 9px 20px;
+  font-size: .875rem; font-weight: 600; cursor: pointer; transition: opacity .15s;
+}
+.btn-ai-submit:hover { opacity: .9; }
+.btn-ai-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── No results ── */
+.no-results { text-align: center; padding: 32px; color: #94a3b8; font-size: .875rem; }
 `;
-
-const SUBJECT_EMOJIS = ['📚','🧮','🌍','🔬','🎨','💻','🎵','📖','✏️','🏛️','⚗️','🌱'];
-
-const REMINDER_TYPES = [
-  { key: 'MINUTES', label: 'Phút' },
-  { key: 'HOURS',   label: 'Giờ' },
-  { key: 'DAILY',   label: 'Hằng ngày' },
-  { key: 'WEEKLY',  label: 'Hằng tuần' },
-];
-const MINUTE_OPTIONS = [15, 30, 45, 60, 90, 120];
-const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
 
 @Component({
   selector: 'app-deck',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatProgressSpinnerModule, RouterLink],
   styles: [S],
   template: `
     <div class="page">
+
       <!-- ── Header ── -->
       <div class="page-header">
         <div class="hd-left">
@@ -365,7 +541,7 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
           <div>
             <h1 class="page-title">{{ headerTitle() }}</h1>
             @if (view() === 'subjects') {
-              <p class="page-sub">{{ svc.subjects().length }} môn học</p>
+              <p class="page-sub">{{ svc.subjects().length }} môn học · {{ totalSubjectCards() }} thẻ</p>
             } @else {
               <div class="breadcrumb">
                 <span>Flashcards</span>
@@ -375,15 +551,20 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
             }
           </div>
         </div>
-        @if (view() === 'subjects') {
-          <button class="btn-brand" (click)="openCreateSubject()">
-            <mat-icon>create_new_folder</mat-icon> Tạo môn học
-          </button>
-        } @else {
-          <button class="btn-brand" (click)="openCreateDeck()">
-            <mat-icon>add</mat-icon> Thêm bộ thẻ
-          </button>
-        }
+        <div class="hd-right">
+          @if (view() === 'subjects') {
+            <button class="btn-brand" (click)="openCreateSubject()">
+              <mat-icon>create_new_folder</mat-icon> Tạo môn học
+            </button>
+          } @else {
+            <a class="btn-ghost" routerLink="/review">
+              <mat-icon>play_arrow</mat-icon> Ôn tập ngay
+            </a>
+            <button class="btn-brand" (click)="openCreateDeck()">
+              <mat-icon>add</mat-icon> Thêm bộ thẻ
+            </button>
+          }
+        </div>
       </div>
 
       <!-- Loading -->
@@ -393,6 +574,42 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
 
       <!-- ── View: Subjects ── -->
       @if (!svc.loading() && view() === 'subjects') {
+
+        @if (svc.subjects().length > 0) {
+          <!-- Stats overview -->
+          <div class="stats-bar">
+            <div class="stat-chip chip-total">
+              <mat-icon>style</mat-icon>
+              <span class="stat-chip-val">{{ totalSubjectCards() }}</span>
+              <span>tổng thẻ</span>
+            </div>
+            <div class="stat-chip chip-due">
+              <mat-icon>schedule</mat-icon>
+              <span class="stat-chip-val">{{ totalDueCards() }}</span>
+              <span>cần ôn hôm nay</span>
+            </div>
+            <div class="stat-chip chip-master">
+              <mat-icon>verified</mat-icon>
+              <span class="stat-chip-val">{{ totalMasteredCards() }}</span>
+              <span>đã thành thạo</span>
+            </div>
+            <div class="stat-chip chip-new">
+              <mat-icon>fiber_new</mat-icon>
+              <span class="stat-chip-val">{{ totalNewCards() }}</span>
+              <span>thẻ mới</span>
+            </div>
+          </div>
+
+          <!-- Search bar -->
+          <div class="toolbar">
+            <div class="search-wrap">
+              <mat-icon class="search-icon">search</mat-icon>
+              <input class="search-input" [(ngModel)]="subjectSearch"
+                     placeholder="Tìm môn học..." />
+            </div>
+          </div>
+        }
+
         @if (svc.subjects().length === 0) {
           <div class="glass">
             <div class="empty">
@@ -404,9 +621,11 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
               </button>
             </div>
           </div>
+        } @else if (filteredSubjects().length === 0) {
+          <div class="no-results">Không tìm thấy môn học nào phù hợp</div>
         } @else {
           <div class="subject-grid">
-            @for (sub of svc.subjects(); track sub.id) {
+            @for (sub of filteredSubjects(); track sub.id) {
               <div class="subject-card" (click)="enterSubject(sub)">
                 <div class="subject-cover" [style.background]="subjectGradient(sub.color)">
                   <div class="subject-cover-overlay"></div>
@@ -414,10 +633,31 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
                 </div>
                 <div class="subject-body">
                   <p class="subject-name">{{ sub.name }}</p>
-                  <div class="subject-meta">
-                    <mat-icon>style</mat-icon>
-                    {{ sub.deckCount }} bộ thẻ
+                  <div class="subject-meta-row">
+                    <span class="subject-meta-item">
+                      <mat-icon>style</mat-icon>{{ sub.deckCount }} bộ thẻ
+                    </span>
+                    <span class="subject-meta-item">
+                      <mat-icon>credit_card</mat-icon>{{ sub.totalCardCount }} thẻ
+                    </span>
+                    @if (sub.dueCardCount > 0) {
+                      <span class="due-badge">
+                        <mat-icon>schedule</mat-icon>{{ sub.dueCardCount }} cần ôn
+                      </span>
+                    }
                   </div>
+                  @if (sub.totalCardCount > 0) {
+                    <div class="progress-wrap">
+                      <div class="progress-label">
+                        <span>Thành thạo</span>
+                        <span>{{ sub.masteredCardCount }}/{{ sub.totalCardCount }}</span>
+                      </div>
+                      <div class="progress-track">
+                        <div class="progress-fill"
+                             [style.width.%]="progressPct(sub.masteredCardCount, sub.totalCardCount)"></div>
+                      </div>
+                    </div>
+                  }
                 </div>
                 <div class="subject-footer">
                   @if (sub.reminderEnabled) {
@@ -427,8 +667,8 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
                     </span>
                   }
                   <span class="subject-footer-spacer"></span>
-                  <button class="btn-icon" (click)="openEditSubject(sub, $event)"><mat-icon>edit</mat-icon></button>
-                  <button class="btn-icon" (click)="confirmDeleteSubject(sub, $event)" style="color:#f43f5e"><mat-icon>delete_outline</mat-icon></button>
+                  <button class="btn-icon" title="Chỉnh sửa" (click)="openEditSubject(sub, $event)"><mat-icon>edit</mat-icon></button>
+                  <button class="btn-icon" title="Xóa" (click)="confirmDeleteSubject(sub, $event)" style="color:#f43f5e"><mat-icon>delete_outline</mat-icon></button>
                 </div>
               </div>
             }
@@ -438,6 +678,48 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
 
       <!-- ── View: Decks ── -->
       @if (!svc.loading() && view() === 'decks') {
+
+        @if (svc.decks().length > 0) {
+          <!-- Stats bar for this subject -->
+          <div class="stats-bar">
+            <div class="stat-chip chip-total">
+              <mat-icon>credit_card</mat-icon>
+              <span class="stat-chip-val">{{ selectedSubject()?.totalCardCount ?? 0 }}</span>
+              <span>thẻ</span>
+            </div>
+            <div class="stat-chip chip-due">
+              <mat-icon>schedule</mat-icon>
+              <span class="stat-chip-val">{{ selectedSubject()?.dueCardCount ?? 0 }}</span>
+              <span>cần ôn</span>
+            </div>
+            <div class="stat-chip chip-master">
+              <mat-icon>verified</mat-icon>
+              <span class="stat-chip-val">{{ selectedSubject()?.masteredCardCount ?? 0 }}</span>
+              <span>thành thạo</span>
+            </div>
+            <div class="stat-chip chip-new">
+              <mat-icon>fiber_new</mat-icon>
+              <span class="stat-chip-val">{{ deckNewCards() }}</span>
+              <span>thẻ mới</span>
+            </div>
+          </div>
+
+          <!-- Search + Sort toolbar -->
+          <div class="toolbar">
+            <div class="search-wrap">
+              <mat-icon class="search-icon">search</mat-icon>
+              <input class="search-input" [(ngModel)]="deckSearch"
+                     placeholder="Tìm bộ thẻ..." />
+            </div>
+            <select class="sort-select" [(ngModel)]="deckSort">
+              <option value="recent">Gần nhất</option>
+              <option value="name">Tên A-Z</option>
+              <option value="cards">Nhiều thẻ nhất</option>
+              <option value="due">Cần ôn nhiều nhất</option>
+            </select>
+          </div>
+        }
+
         @if (svc.decks().length === 0) {
           <div class="glass">
             <div class="empty">
@@ -449,20 +731,42 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
               </button>
             </div>
           </div>
+        } @else if (filteredDecks().length === 0) {
+          <div class="no-results">Không tìm thấy bộ thẻ nào phù hợp</div>
         } @else {
           <div class="deck-grid">
-            @for (deck of svc.decks(); track deck.id) {
+            @for (deck of filteredDecks(); track deck.id) {
               <div class="deck-card" [class.active]="selectedDeck()?.id === deck.id" (click)="selectDeck(deck)">
                 <div class="deck-cover" [style.background]="deck.coverColor"></div>
                 <div class="deck-body">
                   <p class="deck-name">{{ deck.name }}</p>
                   @if (deck.description) { <p class="deck-desc">{{ deck.description }}</p> }
-                  <div class="deck-meta"><mat-icon>credit_card</mat-icon>{{ deck.cardCount }} thẻ</div>
+                  <div class="deck-chips">
+                    <span class="deck-chip chip-cards">
+                      <mat-icon>credit_card</mat-icon>{{ deck.cardCount }} thẻ
+                    </span>
+                    @if (deck.dueCardCount > 0) {
+                      <span class="deck-chip chip-due2">
+                        <mat-icon>schedule</mat-icon>{{ deck.dueCardCount }} cần ôn
+                      </span>
+                    }
+                    @if (deck.masteredCardCount > 0) {
+                      <span class="deck-chip chip-mastered">
+                        <mat-icon>verified</mat-icon>{{ deck.masteredCardCount }} thành thạo
+                      </span>
+                    }
+                  </div>
+                  @if (deck.cardCount > 0) {
+                    <div class="progress-track">
+                      <div class="progress-fill"
+                           [style.width.%]="progressPct(deck.masteredCardCount, deck.cardCount)"></div>
+                    </div>
+                  }
                 </div>
                 <div class="deck-footer">
                   <span class="deck-footer-spacer"></span>
-                  <button class="btn-icon" (click)="openEditDeck(deck,$event)"><mat-icon>edit</mat-icon></button>
-                  <button class="btn-icon" (click)="confirmDeleteDeck(deck,$event)" style="color:#f43f5e"><mat-icon>delete_outline</mat-icon></button>
+                  <button class="btn-icon" title="Chỉnh sửa" (click)="openEditDeck(deck,$event)"><mat-icon>edit</mat-icon></button>
+                  <button class="btn-icon" title="Xóa" (click)="confirmDeleteDeck(deck,$event)" style="color:#f43f5e"><mat-icon>delete_outline</mat-icon></button>
                 </div>
               </div>
             }
@@ -477,10 +781,13 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
                 <div class="panel-dot" [style.background]="selectedDeck()!.coverColor"></div>
                 <div>
                   <div class="panel-name">{{ selectedDeck()!.name }}</div>
-                  <div class="panel-count">{{ cards().length }} thẻ</div>
+                  <div class="panel-count">{{ filteredCards().length }} / {{ cards().length }} thẻ</div>
                 </div>
               </div>
               <div class="panel-header-right">
+                <button class="btn-ai" (click)="openAiModal()">
+                  <mat-icon>auto_awesome</mat-icon> Tạo bằng AI
+                </button>
                 <button class="btn-ghost" (click)="openCreateCard()">
                   <mat-icon>add</mat-icon> Thêm thẻ
                 </button>
@@ -499,26 +806,58 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
                 </button>
               </div>
             } @else {
-              <div class="card-list">
-                @for (card of cards(); track card.id) {
-                  <div class="flash-card">
-                    <div class="flash-content">
-                      <div class="flash-front">{{ card.frontText }}</div>
-                      <div class="flash-back">{{ card.backText }}</div>
-                      @if (card.tags?.length) {
-                        <div class="flash-tags">
-                          @for (tag of card.tags; track tag) { <span class="tag-pill">{{ tag }}</span> }
+              <!-- Card search + sort -->
+              <div class="card-search-wrap">
+                <div class="card-search-container">
+                  <mat-icon class="card-search-icon">search</mat-icon>
+                  <input class="card-search" [(ngModel)]="cardSearch"
+                         placeholder="Tìm thẻ..." />
+                </div>
+              </div>
+              <div class="card-sort-row">
+                <button class="sort-chip" [class.active]="cardSort === 'default'" (click)="cardSort = 'default'">Mặc định</button>
+                <button class="sort-chip" [class.active]="cardSort === 'due'" (click)="cardSort = 'due'">Cần ôn trước</button>
+                <button class="sort-chip" [class.active]="cardSort === 'state'" (click)="cardSort = 'state'">Theo trạng thái</button>
+                <button class="sort-chip" [class.active]="cardSort === 'alpha'" (click)="cardSort = 'alpha'">A-Z</button>
+              </div>
+
+              @if (filteredCards().length === 0) {
+                <div class="no-results">Không tìm thấy thẻ nào</div>
+              } @else {
+                <div class="card-list">
+                  @for (card of filteredCards(); track card.id) {
+                    <div class="flash-card">
+                      <div class="flash-card-header" (click)="toggleCardExpand(card.id)">
+                        <div class="flash-content">
+                          <div class="flash-front">{{ card.frontText }}</div>
+                          @if (expandedCardId() !== card.id) {
+                            <div class="flash-back-preview">{{ card.backText }}</div>
+                          }
+                          @if (card.tags && card.tags.length) {
+                            <div class="flash-tags">
+                              @for (tag of card.tags; track tag) { <span class="tag-pill">{{ tag }}</span> }
+                            </div>
+                          }
+                        </div>
+                        <div class="flash-meta">
+                          <span class="state-badge" [class]="stateClass(card.fsrsState)">{{ stateLabel(card.fsrsState) }}</span>
+                          <span class="review-date-badge" [class]="reviewDateClass(card)">{{ reviewDateLabel(card) }}</span>
+                        </div>
+                        <div class="flash-actions">
+                          <button class="btn-icon" (click)="openEditCard(card);$event.stopPropagation()"><mat-icon>edit</mat-icon></button>
+                          <button class="btn-icon" (click)="deleteCard(card);$event.stopPropagation()" style="color:#f43f5e"><mat-icon>delete_outline</mat-icon></button>
+                        </div>
+                      </div>
+                      @if (expandedCardId() === card.id) {
+                        <div class="flash-back-full">
+                          <div class="back-label">Mặt sau</div>
+                          {{ card.backText }}
                         </div>
                       }
                     </div>
-                    <span class="state-badge" [class]="stateClass(card.fsrsState)">{{ stateLabel(card.fsrsState) }}</span>
-                    <div class="flash-actions">
-                      <button class="btn-icon" (click)="openEditCard(card)"><mat-icon>edit</mat-icon></button>
-                      <button class="btn-icon" (click)="deleteCard(card)" style="color:#f43f5e"><mat-icon>delete_outline</mat-icon></button>
-                    </div>
-                  </div>
-                }
-              </div>
+                  }
+                </div>
+              }
             }
           </div>
         }
@@ -534,7 +873,6 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
             {{ editingSubject() ? 'Chỉnh sửa môn học' : 'Tạo môn học mới' }}
           </div>
 
-          <!-- Emoji -->
           <div class="form-group">
             <label class="form-label">Biểu tượng</label>
             <div class="emoji-row">
@@ -560,11 +898,9 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
             </div>
           </div>
 
-          <!-- Reminder config -->
           <div class="form-group">
             <label class="form-label">Nhắc nhở học</label>
             <div class="reminder-section">
-              <!-- Toggle on/off -->
               <div class="toggle-row" [style.margin-bottom]="subjectForm.reminderEnabled ? '14px' : '0'">
                 <div class="toggle-wrap" (click)="subjectForm.reminderEnabled = !subjectForm.reminderEnabled">
                   <div class="toggle-track" [class.on]="subjectForm.reminderEnabled"></div>
@@ -574,7 +910,6 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
               </div>
 
               @if (subjectForm.reminderEnabled) {
-                <!-- Type tabs -->
                 <div class="reminder-tabs">
                   @for (t of reminderTypes; track t.key) {
                     <button class="reminder-tab" [class.active]="subjectForm.reminderType === t.key"
@@ -582,7 +917,6 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
                   }
                 </div>
 
-                <!-- MINUTES -->
                 @if (subjectForm.reminderType === 'MINUTES') {
                   <div class="form-label">Nhắc mỗi</div>
                   <div class="interval-pills">
@@ -594,7 +928,6 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
                   <p class="reminder-hint">Thông báo liên tục mỗi {{ subjectForm.reminderInterval }} phút khi đang học</p>
                 }
 
-                <!-- HOURS -->
                 @if (subjectForm.reminderType === 'HOURS') {
                   <div class="form-label">Nhắc mỗi</div>
                   <div class="interval-pills">
@@ -606,14 +939,12 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
                   <p class="reminder-hint">Nhắc bạn học môn này mỗi {{ subjectForm.reminderInterval }} giờ</p>
                 }
 
-                <!-- DAILY -->
                 @if (subjectForm.reminderType === 'DAILY') {
                   <div class="form-label" style="margin-bottom:6px">Nhắc lúc</div>
                   <input class="form-input" type="time" [(ngModel)]="subjectForm.reminderTime" style="max-width:160px" />
                   <p class="reminder-hint">Thông báo hằng ngày lúc {{ subjectForm.reminderTime }}</p>
                 }
 
-                <!-- WEEKLY -->
                 @if (subjectForm.reminderType === 'WEEKLY') {
                   <div class="form-row" style="align-items:flex-end;gap:12px;margin-bottom:0">
                     <div class="form-group" style="margin-bottom:0;flex:0 0 auto">
@@ -711,16 +1042,104 @@ const HOUR_OPTIONS   = [1, 2, 3, 4, 6, 8, 12];
         </div>
       </div>
     }
+
+    <!-- ════ AI Generation Modal ════ -->
+    @if (showAiModal()) {
+      <div class="overlay" (click)="closeAiModal()">
+        <div class="modal modal-ai" (click)="$event.stopPropagation()">
+          <div class="modal-title">
+            <mat-icon style="color:#7c3aed">auto_awesome</mat-icon>
+            Tạo flashcard bằng AI
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Văn bản nguồn *</label>
+            <textarea class="form-textarea" style="min-height:120px"
+                      [(ngModel)]="aiText"
+                      [disabled]="aiGenerating()"
+                      placeholder="Dán văn bản bạn muốn học..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Số thẻ tối đa (1–20)</label>
+            <input class="form-input" type="number" min="1" max="20"
+                   [(ngModel)]="aiMaxCards"
+                   [disabled]="aiGenerating()"
+                   style="max-width:100px" />
+          </div>
+
+          @if (!aiGenerating() && aiResults().length === 0) {
+            <button class="btn-ai-submit" style="width:100%;margin-bottom:4px"
+                    (click)="generateAiCards()"
+                    [disabled]="!aiText.trim()">
+              <mat-icon style="font-size:16px;vertical-align:middle;margin-right:4px">auto_awesome</mat-icon>
+              Tạo thẻ
+            </button>
+          }
+
+          @if (aiGenerating()) {
+            <div class="ai-spinner-row">
+              <mat-spinner [diameter]="24" color="primary"></mat-spinner>
+              <span class="ai-spinner-text">AI đang tạo thẻ...</span>
+            </div>
+          }
+
+          @if (aiError()) {
+            <div class="ai-error">{{ aiError() }}</div>
+          }
+
+          @if (aiResults().length > 0) {
+            <div class="form-group" style="margin-top:8px">
+              <p class="ai-count-label">{{ aiResults().length }} thẻ được tạo — chọn những thẻ muốn lưu:</p>
+              <div class="ai-result-list">
+                @for (card of aiResults(); track $index) {
+                  <div class="ai-result-item" [class.selected]="aiSelected()[$index]"
+                       (click)="toggleAiCard($index)">
+                    <input type="checkbox" class="ai-result-checkbox"
+                           [checked]="aiSelected()[$index]"
+                           (click)="$event.stopPropagation()"
+                           (change)="toggleAiCard($index)" />
+                    <div class="ai-result-content">
+                      <div class="ai-result-front">{{ card.front }}</div>
+                      <div class="ai-result-back">{{ card.back }}</div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          <div class="modal-footer">
+            <button class="btn-cancel" (click)="closeAiModal()">Đóng</button>
+            @if (aiResults().length > 0) {
+              <button class="btn-cancel" style="margin-right:4px" (click)="resetAiModal()">Tạo lại</button>
+              <button class="btn-ai-submit" (click)="saveAiCards()"
+                      [disabled]="aiSaving() || selectedAiCount() === 0">
+                {{ aiSaving() ? 'Đang lưu...' : 'Thêm ' + selectedAiCount() + ' thẻ đã chọn' }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+    }
   `,
 })
 export class DeckComponent implements OnInit {
   protected svc = inject(DeckService);
 
-  view = signal<'subjects' | 'decks'>('subjects');
+  view            = signal<'subjects' | 'decks'>('subjects');
   selectedSubject = signal<Subject | null>(null);
   selectedDeck    = signal<Deck | null>(null);
   cards           = signal<Card[]>([]);
   cardsLoading    = signal(false);
+  expandedCardId  = signal<string | null>(null);
+
+  // Search & sort state
+  subjectSearch = '';
+  deckSearch    = '';
+  deckSort      = 'recent';
+  cardSearch    = '';
+  cardSort      = 'default';
 
   // Subject modal
   showSubjectModal = signal(false);
@@ -739,11 +1158,23 @@ export class DeckComponent implements OnInit {
   deckForm: CreateDeckRequest = { name: '', description: '', coverColor: '#6366f1' };
 
   // Card modal
-  showCardModal = signal(false);
-  editingCard   = signal<Card | null>(null);
-  savingCard    = signal(false);
-  cardForm      = { frontText: '', backText: '' };
-  cardTagsInput = '';
+  showCardModal  = signal(false);
+  editingCard    = signal<Card | null>(null);
+  savingCard     = signal(false);
+  cardSaveError  = signal<string | null>(null);
+  cardsLoadError = signal<string | null>(null);
+  cardForm       = { frontText: '', backText: '' };
+  cardTagsInput  = '';
+
+  // AI generation modal
+  showAiModal  = signal(false);
+  aiText       = '';
+  aiMaxCards   = 10;
+  aiGenerating = signal(false);
+  aiResults    = signal<GeneratedCard[]>([]);
+  aiSelected   = signal<boolean[]>([]);
+  aiSaving     = signal(false);
+  aiError      = signal<string | null>(null);
 
   colors        = DECK_COLORS;
   emojis        = SUBJECT_EMOJIS;
@@ -752,15 +1183,77 @@ export class DeckComponent implements OnInit {
   minuteOptions = MINUTE_OPTIONS;
   hourOptions   = HOUR_OPTIONS;
 
+  // ── Global subject stats ──────────────────────────────────────────────────
+  totalSubjectCards  = computed(() => this.svc.subjects().reduce((s, sub) => s + (sub.totalCardCount ?? 0), 0));
+  totalDueCards      = computed(() => this.svc.subjects().reduce((s, sub) => s + (sub.dueCardCount ?? 0), 0));
+  totalMasteredCards = computed(() => this.svc.subjects().reduce((s, sub) => s + (sub.masteredCardCount ?? 0), 0));
+  totalNewCards = computed(() =>
+    Math.max(0, this.totalSubjectCards() - this.totalMasteredCards())
+  );
+
+  // New cards per deck view = total - mastered in subject
+  deckNewCards = computed(() => {
+    const sub = this.selectedSubject();
+    if (!sub) return 0;
+    return Math.max(0, (sub.totalCardCount ?? 0) - (sub.masteredCardCount ?? 0));
+  });
+
+  // ── Filtered lists ────────────────────────────────────────────────────────
+  filteredSubjects = computed(() => {
+    const q = this.subjectSearch.toLowerCase().trim();
+    const list = q ? this.svc.subjects().filter(s => s.name.toLowerCase().includes(q)) : this.svc.subjects();
+    return list;
+  });
+
+  filteredDecks = computed(() => {
+    const q = this.deckSearch.toLowerCase().trim();
+    let list = q ? this.svc.decks().filter(d => d.name.toLowerCase().includes(q) || (d.description ?? '').toLowerCase().includes(q)) : [...this.svc.decks()];
+    switch (this.deckSort) {
+      case 'name':  list.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case 'cards': list.sort((a, b) => b.cardCount - a.cardCount); break;
+      case 'due':   list.sort((a, b) => b.dueCardCount - a.dueCardCount); break;
+    }
+    return list;
+  });
+
+  filteredCards = computed(() => {
+    const q = this.cardSearch.toLowerCase().trim();
+    let list = q
+      ? this.cards().filter(c =>
+          (c.frontText ?? '').toLowerCase().includes(q) ||
+          (c.backText ?? '').toLowerCase().includes(q) ||
+          c.tags.some(t => t.toLowerCase().includes(q)))
+      : [...this.cards()];
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    switch (this.cardSort) {
+      case 'due':
+        list.sort((a, b) => {
+          const da = a.nextReviewDate ? new Date(a.nextReviewDate).getTime() : 0;
+          const db = b.nextReviewDate ? new Date(b.nextReviewDate).getTime() : 0;
+          return da - db;
+        });
+        break;
+      case 'state':
+        list.sort((a, b) => a.fsrsState - b.fsrsState);
+        break;
+      case 'alpha':
+        list.sort((a, b) => (a.frontText ?? '').localeCompare(b.frontText ?? ''));
+        break;
+    }
+    return list;
+  });
+
   ngOnInit() {
     this.svc.loadSubjects().subscribe();
   }
 
-  // ── Navigation ──
+  // ── Navigation ──────────────────────────────────────────────────────────
   enterSubject(sub: Subject) {
     this.selectedSubject.set(sub);
     this.selectedDeck.set(null);
     this.cards.set([]);
+    this.deckSearch = '';
     this.view.set('decks');
     this.svc.loadDecksBySubject(sub.id).subscribe();
   }
@@ -770,27 +1263,36 @@ export class DeckComponent implements OnInit {
     this.selectedSubject.set(null);
     this.selectedDeck.set(null);
     this.cards.set([]);
+    this.deckSearch = '';
+    this.cardSearch = '';
   }
 
   selectDeck(deck: Deck) {
     if (this.selectedDeck()?.id === deck.id) { this.selectedDeck.set(null); return; }
     this.selectedDeck.set(deck);
+    this.cardSearch = '';
+    this.cardSort = 'default';
+    this.expandedCardId.set(null);
     this.loadCards(deck.id);
   }
 
   loadCards(deckId: string) {
     this.cardsLoading.set(true);
+    this.cards.set([]);
     this.svc.getCards(deckId).subscribe({
-      next: res => { this.cards.set(res.data); this.cardsLoading.set(false); },
-      error: ()  => this.cardsLoading.set(false),
+      next: res => { this.cards.set(res.data ?? []); this.cardsLoading.set(false); },
+      error: ()  => { this.cards.set([]); this.cardsLoading.set(false); },
     });
   }
 
-  // ── Header helpers ──
+  toggleCardExpand(id: string) {
+    this.expandedCardId.update(cur => cur === id ? null : id);
+  }
+
+  // ── Header helpers ────────────────────────────────────────────────────
   headerGradient() {
-    if (this.view() === 'decks' && this.selectedSubject()) {
+    if (this.view() === 'decks' && this.selectedSubject())
       return this.subjectGradient(this.selectedSubject()!.color);
-    }
     return 'linear-gradient(135deg,#06b6d4,#22d3ee)';
   }
   headerEmoji() {
@@ -802,16 +1304,53 @@ export class DeckComponent implements OnInit {
   subjectGradient(color: string) {
     return `linear-gradient(135deg,${color},${color}cc)`;
   }
+  progressPct(mastered: number, total: number): number {
+    return total > 0 ? Math.round(mastered / total * 100) : 0;
+  }
 
-  // ── Subject CRUD ──
+  // ── Card state helpers ─────────────────────────────────────────────────
+  stateLabel(state: number): string { return STATE_LABELS[state] ?? 'Không rõ'; }
+  stateClass(state: number): string { return STATE_CLASSES[state] ?? ''; }
+
+  reviewDateLabel(card: Card): string {
+    if (!card.nextReviewDate) return 'Mới';
+    const today = new Date(); today.setHours(0,0,0,0);
+    const due   = new Date(card.nextReviewDate + 'T00:00:00');
+    const diff  = Math.round((due.getTime() - today.getTime()) / 86400000);
+    if (diff < 0)  return `Quá hạn ${-diff} ngày`;
+    if (diff === 0) return 'Hôm nay';
+    if (diff === 1) return 'Ngày mai';
+    if (diff <= 7)  return `${diff} ngày nữa`;
+    return `${diff} ngày`;
+  }
+  reviewDateClass(card: Card): string {
+    if (!card.nextReviewDate) return 'review-later';
+    const today = new Date(); today.setHours(0,0,0,0);
+    const due   = new Date(card.nextReviewDate + 'T00:00:00');
+    const diff  = Math.round((due.getTime() - today.getTime()) / 86400000);
+    if (diff < 0)  return 'review-due';
+    if (diff === 0) return 'review-today';
+    if (diff <= 3)  return 'review-soon';
+    return 'review-later';
+  }
+
+  reminderBadgeText(sub: Subject): string {
+    if (!sub.reminderEnabled) return '';
+    switch (sub.reminderType) {
+      case 'MINUTES': return `${sub.reminderInterval} phút`;
+      case 'HOURS':   return `${sub.reminderInterval} giờ`;
+      case 'DAILY':   return sub.reminderTime ?? 'Hằng ngày';
+      case 'WEEKLY':  return 'Hằng tuần';
+      default:        return 'Nhắc nhở';
+    }
+  }
+
+  // ── Subject CRUD ──────────────────────────────────────────────────────
   openCreateSubject() {
     this.editingSubject.set(null);
     this.subjectForm = {
       name: '', emoji: '📚', color: '#6366f1',
-      reminderEnabled: false,
-      reminderType: 'DAILY',
-      reminderInterval: 30,
-      reminderTime: '20:00',
+      reminderEnabled: false, reminderType: 'DAILY', reminderInterval: 30, reminderTime: '20:00',
     };
     this.selectedDays = [];
     this.showSubjectModal.set(true);
@@ -868,7 +1407,7 @@ export class DeckComponent implements OnInit {
     else          this.selectedDays.push(key);
   }
 
-  // ── Deck CRUD ──
+  // ── Deck CRUD ─────────────────────────────────────────────────────────
   openCreateDeck() {
     this.editingDeck.set(null);
     this.deckForm = { name: '', description: '', coverColor: '#6366f1', subjectId: this.selectedSubject()?.id };
@@ -901,7 +1440,6 @@ export class DeckComponent implements OnInit {
     if (!confirm(`Xóa bộ thẻ "${deck.name}"?`)) return;
     this.svc.deleteDeck(deck.id).subscribe(() => {
       if (this.selectedDeck()?.id === deck.id) this.selectedDeck.set(null);
-      // Refresh subject deck count
       if (this.selectedSubject()) {
         this.svc.subjects.update(list => list.map(s =>
           s.id === this.selectedSubject()!.id ? {...s, deckCount: s.deckCount - 1} : s
@@ -910,7 +1448,7 @@ export class DeckComponent implements OnInit {
     });
   }
 
-  // ── Card CRUD ──
+  // ── Card CRUD ─────────────────────────────────────────────────────────
   openCreateCard() {
     this.editingCard.set(null);
     this.cardForm = { frontText: '', backText: '' };
@@ -925,7 +1463,7 @@ export class DeckComponent implements OnInit {
     this.showCardModal.set(true);
   }
 
-  closeCardModal() { this.showCardModal.set(false); }
+  closeCardModal() { this.showCardModal.set(false); this.editingCard.set(null); }
 
   saveCard() {
     const deck = this.selectedDeck();
@@ -938,13 +1476,14 @@ export class DeckComponent implements OnInit {
       tags:      tags.length ? tags : undefined,
     };
     this.savingCard.set(true);
-    const op = this.editingCard()
+    const isEditing = !!this.editingCard();
+    const op = isEditing
       ? this.svc.updateCard(deck.id, this.editingCard()!.id, req)
       : this.svc.createCard(deck.id, req);
     op.subscribe({
       next: res => {
         this.savingCard.set(false); this.closeCardModal();
-        if (this.editingCard()) {
+        if (isEditing) {
           this.cards.update(list => list.map(c => c.id === res.data.id ? res.data : c));
         } else {
           this.cards.update(list => [...list, res.data]);
@@ -964,17 +1503,77 @@ export class DeckComponent implements OnInit {
     });
   }
 
-  stateLabel(s: number) { return STATE_LABELS[s]  ?? 'Mới'; }
-  stateClass(s: number) { return STATE_CLASSES[s] ?? 'state-new'; }
+  // ── AI Generation ─────────────────────────────────────────────────────
+  openAiModal() {
+    this.resetAiModal();
+    this.showAiModal.set(true);
+  }
 
-  reminderBadgeText(sub: Subject): string {
-    if (!sub.reminderType) return '';
-    switch (sub.reminderType) {
-      case 'MINUTES': return `${sub.reminderInterval} phút`;
-      case 'HOURS':   return `${sub.reminderInterval} giờ`;
-      case 'DAILY':   return sub.reminderTime ?? 'Hằng ngày';
-      case 'WEEKLY':  return sub.reminderTime ?? 'Hằng tuần';
-      default:        return '';
-    }
+  closeAiModal() { this.showAiModal.set(false); }
+
+  resetAiModal() {
+    this.aiText = '';
+    this.aiMaxCards = 10;
+    this.aiResults.set([]);
+    this.aiSelected.set([]);
+    this.aiError.set(null);
+    this.aiGenerating.set(false);
+    this.aiSaving.set(false);
+  }
+
+  generateAiCards() {
+    const deck = this.selectedDeck();
+    if (!deck || !this.aiText.trim()) return;
+    const maxCards = Math.min(Math.max(1, this.aiMaxCards), 20);
+    this.aiGenerating.set(true);
+    this.aiError.set(null);
+    this.aiResults.set([]);
+    this.aiSelected.set([]);
+    this.svc.generateCards(this.aiText.trim(), deck.id, maxCards).subscribe({
+      next: res => {
+        const cards = res.data ?? [];
+        this.aiResults.set(cards);
+        this.aiSelected.set(cards.map(() => true));
+        this.aiGenerating.set(false);
+      },
+      error: err => {
+        this.aiError.set(err?.error?.message ?? 'Không thể tạo thẻ. Vui lòng thử lại.');
+        this.aiGenerating.set(false);
+      },
+    });
+  }
+
+  toggleAiCard(index: number) {
+    this.aiSelected.update(arr => { const c = [...arr]; c[index] = !c[index]; return c; });
+  }
+
+  selectedAiCount(): number { return this.aiSelected().filter(Boolean).length; }
+
+  saveAiCards() {
+    const deck = this.selectedDeck();
+    if (!deck) return;
+    const toSave = this.aiResults().filter((_, i) => this.aiSelected()[i]);
+    if (toSave.length === 0) return;
+    this.aiSaving.set(true);
+    let saved = 0; let failed = 0;
+    const saveNext = (idx: number) => {
+      if (idx >= toSave.length) {
+        this.aiSaving.set(false);
+        if (failed > 0) {
+          this.aiError.set(`Lưu thất bại ${failed} thẻ. Đã lưu ${saved} thẻ.`);
+        } else {
+          this.svc.decks.update(list => list.map(d => d.id === deck.id ? { ...d, cardCount: d.cardCount + saved } : d));
+          this.loadCards(deck.id);
+          this.closeAiModal();
+        }
+        return;
+      }
+      const c = toSave[idx];
+      this.svc.createCard(deck.id, { deckId: deck.id, frontText: c.front, backText: c.back }).subscribe({
+        next: () => { saved++; saveNext(idx + 1); },
+        error: () => { failed++; saveNext(idx + 1); },
+      });
+    };
+    saveNext(0);
   }
 }

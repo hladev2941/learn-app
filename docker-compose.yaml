@@ -140,6 +140,7 @@ services:
       REDIS_HOST: learn-redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_pass}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
       AUTH_SERVICE_URL: http://learn-auth:8081
       FLASHCARD_SERVICE_URL: http://learn-flashcard:8083
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
@@ -193,6 +194,10 @@ services:
       DB_URL: jdbc:postgresql://learn-postgres:5432/${POSTGRES_DB:-learn_app}?currentSchema=flashcard
       DB_USERNAME: ${POSTGRES_USER:-learn_user}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-learn_pass}
+      REDIS_HOST: learn-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_pass}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
       AUTH_SERVICE_URL: http://learn-auth:8081
       CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
@@ -206,6 +211,8 @@ services:
       - learn_net
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 # ══════════════════════════════════════════════════

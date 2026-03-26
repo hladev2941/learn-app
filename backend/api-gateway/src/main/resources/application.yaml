@@ -32,7 +32,7 @@ spring:
         - id: study-service
           uri: ${STUDY_SERVICE_URL:http://learn-study:8082}
           predicates:
-            - Path=/api/v1/sessions/**, /api/v1/streaks/**, /api/v1/rewards/**, /api/v1/analytics/**, /api/v1/goals/**
+            - Path=/api/v1/sessions/**, /api/v1/streaks/**, /api/v1/rewards/**, /api/v1/analytics/**, /api/v1/goals/**, /api/v1/badges/**
           filters:
             - name: JwtAuthenticationFilter
 

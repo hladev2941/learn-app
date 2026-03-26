@@ -24,7 +24,9 @@ public class JwtService {
     @Value("${jwt.access-token-expiration}")
     private long accessTokenExpiration;
 
-    private static final String BLACKLIST_PREFIX = "jwt:blacklist:";
+    private static final String BLACKLIST_PREFIX  = "jwt:blacklist:";
+    private static final String USER_DETAIL_PREFIX = "user:detail:";
+    private static final long   USER_DETAIL_TTL_DAYS = 7;
 
     private final StringRedisTemplate redisTemplate;
 
@@ -74,6 +76,21 @@ public class JwtService {
             redisTemplate.opsForValue()
                     .set(BLACKLIST_PREFIX + token, "1", ttl, TimeUnit.MILLISECONDS);
         }
+    }
+
+    /** Cache user detail in Redis so downstream services can validate without calling auth-service. */
+    public void cacheUserDetail(User user) {
+        String json = String.format(
+            "{\"id\":\"%s\",\"email\":\"%s\",\"displayName\":\"%s\",\"role\":\"%s\",\"timezone\":\"%s\"}",
+            user.getId(), user.getEmail(), user.getDisplayName(), user.getRole().name(), user.getTimezone()
+        );
+        redisTemplate.opsForValue()
+                .set(USER_DETAIL_PREFIX + user.getId(), json, USER_DETAIL_TTL_DAYS, TimeUnit.DAYS);
+    }
+
+    /** Remove cached user detail (call on logout or profile update). */
+    public void evictUserDetail(String userId) {
+        redisTemplate.delete(USER_DETAIL_PREFIX + userId);
     }
 
     private boolean isBlacklisted(String token) {

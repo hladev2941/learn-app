@@ -83,6 +83,11 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void logout(String accessToken, String refreshToken) {
+        try {
+            String userId = jwtService.extractClaims(accessToken).getSubject();
+            jwtService.evictUserDetail(userId);
+        } catch (Exception ignored) {}
+
         jwtService.blacklistToken(accessToken);
         refreshTokenRepository.findByToken(refreshToken)
                 .ifPresent(refreshTokenRepository::delete);
@@ -99,6 +104,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthResponse buildAuthResponse(User user) {
+        jwtService.cacheUserDetail(user);   // cache for downstream services
+
         String accessToken  = jwtService.generateAccessToken(user);
         String refreshToken = UUID.randomUUID().toString();
 

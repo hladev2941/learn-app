@@ -103,7 +103,79 @@ interface NavItem {
           <app-notification-bell />
         </div>
 
-        <router-outlet />
+        <div class="content-area">
+          <!-- Page content -->
+          <div class="router-wrap">
+            <router-outlet />
+          </div>
+
+          <!-- Right panel -->
+          <aside class="right-panel">
+
+            <!-- Date display -->
+            <div class="rp-date-card">
+              <p class="rp-weekday">{{ weekday() }}</p>
+              <p class="rp-datestr">{{ dateStr() }}</p>
+            </div>
+
+            <!-- User XP card -->
+            @if (user(); as u) {
+              <div class="rp-user-card">
+                <div class="rp-avatar">{{ initials() }}</div>
+                <p class="rp-name">{{ u.displayName }}</p>
+                <div class="rp-level-row">
+                  <span class="rp-level-badge">Cấp {{ level() }}</span>
+                  <span class="rp-xp-num">{{ u.xpTotal }} XP</span>
+                </div>
+                <div class="rp-xp-track">
+                  <div class="rp-xp-fill" [style.width.%]="levelProgress()"></div>
+                </div>
+                <p class="rp-xp-hint">Còn {{ xpToNextLevel() }} XP đến cấp {{ level() + 1 }}</p>
+              </div>
+            }
+
+            <!-- Study tip -->
+            <div class="rp-tip-card">
+              <p class="rp-section-label">💡 Mẹo học tập</p>
+              <p class="rp-tip-text">{{ tips[currentTip()].text }}</p>
+              <div class="rp-tip-dots">
+                @for (t of tips; track $index) {
+                  <div class="rp-dot" [class.rp-dot-active]="$index === currentTip()"></div>
+                }
+              </div>
+            </div>
+
+            <!-- Quick navigation -->
+            <div class="rp-quick-card">
+              <p class="rp-section-label">Truy cập nhanh</p>
+              <a routerLink="/timer" class="rp-link">
+                <span class="rp-link-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+                  <mat-icon>timer</mat-icon>
+                </span>
+                <span>Hẹn giờ</span>
+              </a>
+              <a routerLink="/review" class="rp-link">
+                <span class="rp-link-icon" style="background:linear-gradient(135deg,#10b981,#34d399)">
+                  <mat-icon>quiz</mat-icon>
+                </span>
+                <span>Ôn tập thẻ</span>
+              </a>
+              <a routerLink="/deck" class="rp-link">
+                <span class="rp-link-icon" style="background:linear-gradient(135deg,#06b6d4,#22d3ee)">
+                  <mat-icon>style</mat-icon>
+                </span>
+                <span>Flashcards</span>
+              </a>
+              <a routerLink="/analytics" class="rp-link">
+                <span class="rp-link-icon" style="background:linear-gradient(135deg,#ec4899,#f472b6)">
+                  <mat-icon>bar_chart</mat-icon>
+                </span>
+                <span>Thống kê</span>
+              </a>
+            </div>
+
+          </aside>
+        </div>
       </main>
     </div>
 
@@ -315,9 +387,132 @@ interface NavItem {
     /* ── Main ── */
     .main-content {
       flex: 1; min-width: 0;
-      overflow-y: auto; overflow-x: hidden;
+      overflow: hidden;
       display: flex; flex-direction: column;
     }
+
+    /* ── Content area (router + right panel) ── */
+    .content-area {
+      flex: 1; display: flex; overflow: hidden;
+    }
+    .router-wrap {
+      flex: 1; min-width: 0;
+      overflow-y: auto; overflow-x: hidden;
+    }
+
+    /* ── Right panel ── */
+    .right-panel {
+      width: 240px; flex-shrink: 0;
+      border-left: 1px solid rgba(199,210,254,0.4);
+      background: rgba(255,255,255,0.45);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      overflow-y: auto;
+      padding: 18px 14px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    @media (max-width: 1200px) { .right-panel { display: none; } }
+
+    /* Date card */
+    .rp-date-card {
+      text-align: center;
+      padding: 14px 12px;
+      background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.07));
+      border: 1px solid rgba(99,102,241,0.15);
+      border-radius: 14px;
+    }
+    .rp-weekday {
+      font-size: 0.7rem; font-weight: 700; color: #6366f1;
+      text-transform: uppercase; letter-spacing: 0.07em; margin: 0;
+    }
+    .rp-datestr {
+      font-size: 1rem; font-weight: 700; color: #1e1b4b; margin: 3px 0 0;
+    }
+
+    /* User card */
+    .rp-user-card {
+      background: rgba(255,255,255,0.78);
+      border: 1px solid rgba(255,255,255,0.9);
+      border-radius: 14px; padding: 16px 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 7px;
+      box-shadow: 0 2px 12px rgba(99,102,241,0.08);
+    }
+    .rp-avatar {
+      width: 46px; height: 46px; border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white; display: flex; align-items: center; justify-content: center;
+      font-size: 1.0625rem; font-weight: 700;
+      box-shadow: 0 4px 12px rgba(99,102,241,0.35);
+    }
+    .rp-name {
+      font-size: 0.875rem; font-weight: 600; color: #1e1b4b; margin: 0;
+      text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .rp-level-row {
+      display: flex; align-items: center; gap: 6px; width: 100%; justify-content: space-between;
+    }
+    .rp-level-badge {
+      font-size: 0.7rem; font-weight: 700;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white; padding: 2px 8px; border-radius: 20px;
+    }
+    .rp-xp-num { font-size: 0.75rem; font-weight: 600; color: #6366f1; }
+    .rp-xp-track {
+      width: 100%; height: 6px; border-radius: 3px;
+      background: rgba(99,102,241,0.12); overflow: hidden;
+    }
+    .rp-xp-fill {
+      height: 100%; border-radius: 3px;
+      background: linear-gradient(90deg, #6366f1, #8b5cf6);
+      transition: width 0.5s ease;
+    }
+    .rp-xp-hint { font-size: 0.7rem; color: #94a3b8; margin: 0; text-align: center; }
+
+    /* Tip card */
+    .rp-tip-card {
+      background: rgba(255,255,255,0.78);
+      border: 1px solid rgba(255,255,255,0.9);
+      border-radius: 14px; padding: 14px 12px;
+      box-shadow: 0 2px 12px rgba(99,102,241,0.06);
+    }
+    .rp-section-label {
+      font-size: 0.7rem; font-weight: 700; color: #64748b;
+      text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px;
+    }
+    .rp-tip-text {
+      font-size: 0.8125rem; color: #374151; line-height: 1.55; margin: 0 0 10px;
+    }
+    .rp-tip-dots { display: flex; gap: 5px; justify-content: center; }
+    .rp-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(99,102,241,0.18); transition: all 0.25s;
+    }
+    .rp-dot.rp-dot-active {
+      background: #6366f1; width: 16px; border-radius: 3px;
+    }
+
+    /* Quick nav card */
+    .rp-quick-card {
+      background: rgba(255,255,255,0.78);
+      border: 1px solid rgba(255,255,255,0.9);
+      border-radius: 14px; padding: 14px 12px;
+      box-shadow: 0 2px 12px rgba(99,102,241,0.06);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .rp-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 8px; border-radius: 10px;
+      text-decoration: none; color: #374151;
+      font-size: 0.8125rem; font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+    }
+    .rp-link:hover { background: rgba(99,102,241,0.08); color: #4f46e5; }
+    .rp-link-icon {
+      display: flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 8px;
+      color: white; flex-shrink: 0;
+    }
+    .rp-link-icon mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
     /* ── Top bar ── */
     .top-bar {
@@ -394,6 +589,40 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   user = this.authService.currentUser;
   mobileOpen = signal(false);
 
+  // ── Right panel ──────────────────────────────────────────────────────────
+
+  private tipInterval: ReturnType<typeof setInterval> | null = null;
+  currentTip = signal(0);
+
+  readonly tips = [
+    { text: 'Học đều 25 phút mỗi ngày hiệu quả hơn học dồn vài tiếng vào cuối tuần.' },
+    { text: 'Ôn tập thẻ đúng lúc sắp quên — đó là khi não hấp thụ kiến thức tốt nhất.' },
+    { text: 'Nghỉ ngắn 5 phút sau mỗi Pomodoro giúp duy trì sự tập trung bền vững hơn.' },
+    { text: 'Tạo flashcard ngay sau khi học bài mới, đừng để qua ngày hôm sau.' },
+    { text: 'Đặt mục tiêu nhỏ, cụ thể từng ngày thay vì kế hoạch lớn mơ hồ.' },
+    { text: 'Streak liên tiếp mỗi ngày là bí quyết số 1 để học ngôn ngữ thành công.' },
+  ];
+
+  weekday = signal('');
+  dateStr = signal('');
+
+  level         = computed(() => Math.floor((this.user()?.xpTotal ?? 0) / 200) + 1);
+  levelProgress = computed(() => ((this.user()?.xpTotal ?? 0) % 200) / 200 * 100);
+  xpToNextLevel = computed(() => 200 - ((this.user()?.xpTotal ?? 0) % 200));
+  initials      = computed(() =>
+    (this.user()?.displayName ?? '?')
+      .split(' ').map((w: string) => w[0] ?? '').join('').slice(0, 2).toUpperCase()
+  );
+
+  private updateDate(): void {
+    const now = new Date();
+    const DAYS = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
+    this.weekday.set(DAYS[now.getDay()]);
+    const d = String(now.getDate()).padStart(2, '0');
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    this.dateStr.set(`${d}/${m}/${now.getFullYear()}`);
+  }
+
   /** Text shown in the ticker — join latest 5 notification titles */
   tickerText = computed(() => {
     const list = this.notificationService.notifications();
@@ -424,19 +653,27 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     } catch (e) {
       console.warn('[Layout] WS connect failed', e);
     }
+
+    // Init right panel
+    this.updateDate();
+    this.tipInterval = setInterval(() => {
+      this.currentTip.update(i => (i + 1) % this.tips.length);
+    }, 8000);
   }
 
   ngOnDestroy(): void {
     this.notificationService.disconnect();
+    if (this.tipInterval) clearInterval(this.tipInterval);
   }
 
   navItems: NavItem[] = [
-    { label: 'Dashboard',  icon: 'dashboard',  route: '/dashboard', color: 'linear-gradient(135deg,#6366f1,#818cf8)' },
-    { label: 'Flashcards', icon: 'style',       route: '/deck',      color: 'linear-gradient(135deg,#06b6d4,#22d3ee)' },
-    { label: 'Hẹn giờ',   icon: 'timer',       route: '/timer',     color: 'linear-gradient(135deg,#f59e0b,#fbbf24)' },
-    { label: 'Ôn tập',    icon: 'quiz',         route: '/review',    color: 'linear-gradient(135deg,#10b981,#34d399)' },
-    { label: 'Thống kê',  icon: 'bar_chart',    route: '/analytics', color: 'linear-gradient(135deg,#ec4899,#f472b6)' },
-    { label: 'Cài đặt',   icon: 'settings',     route: '/settings',  color: 'linear-gradient(135deg,#94a3b8,#cbd5e1)' },
+    { label: 'Dashboard',    icon: 'dashboard',    route: '/dashboard',   color: 'linear-gradient(135deg,#6366f1,#818cf8)' },
+    { label: 'Flashcards',   icon: 'style',         route: '/deck',        color: 'linear-gradient(135deg,#06b6d4,#22d3ee)' },
+    { label: 'Hẹn giờ',     icon: 'timer',         route: '/timer',       color: 'linear-gradient(135deg,#f59e0b,#fbbf24)' },
+    { label: 'Ôn tập',      icon: 'quiz',           route: '/review',      color: 'linear-gradient(135deg,#10b981,#34d399)' },
+    { label: 'Thống kê',    icon: 'bar_chart',      route: '/analytics',   color: 'linear-gradient(135deg,#ec4899,#f472b6)' },
+    { label: 'Xếp hạng',    icon: 'emoji_events',   route: '/leaderboard', color: 'linear-gradient(135deg,#f59e0b,#fbbf24)' },
+    { label: 'Cài đặt',     icon: 'settings',       route: '/settings',    color: 'linear-gradient(135deg,#94a3b8,#cbd5e1)' },
   ];
 
   logout() {

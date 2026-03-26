@@ -32,7 +32,7 @@ export class NotificationService {
     if (!token || this.client?.connected) return;
 
     this.client = new Client({
-      webSocketFactory: () => new SockJS(`${environment.wsUrl}/ws`),
+      webSocketFactory: () => new SockJS(`${window.location.origin}/ws`),
       connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 5000,
       onConnect: () => this.onConnected(),

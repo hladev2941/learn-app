@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -17,4 +18,12 @@ public interface CardReviewRepository extends JpaRepository<CardReview, UUID> {
     long countGoodReviewsByDate(UUID userId, LocalDate date);
 
     long countByUserIdAndReviewDateBetween(UUID userId, LocalDate from, LocalDate to);
+
+    /** Returns [reviewDate, totalCount, goodCount] grouped by day. */
+    @Query("SELECT r.reviewDate, COUNT(r), " +
+           "SUM(CASE WHEN r.rating IN ('GOOD','EASY') THEN 1 ELSE 0 END) " +
+           "FROM CardReview r " +
+           "WHERE r.userId = :userId AND r.reviewDate BETWEEN :from AND :to " +
+           "GROUP BY r.reviewDate ORDER BY r.reviewDate")
+    List<Object[]> findDailyReviewStats(UUID userId, LocalDate from, LocalDate to);
 }

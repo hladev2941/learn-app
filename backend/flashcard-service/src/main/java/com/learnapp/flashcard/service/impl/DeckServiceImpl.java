@@ -5,6 +5,7 @@ import com.learnapp.flashcard.dto.DeckResponse;
 import com.learnapp.flashcard.entity.Deck;
 import com.learnapp.flashcard.entity.Subject;
 import com.learnapp.flashcard.exception.AppException;
+import com.learnapp.flashcard.repository.CardRepository;
 import com.learnapp.flashcard.repository.DeckRepository;
 import com.learnapp.flashcard.repository.SubjectRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,8 +13,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +25,7 @@ public class DeckServiceImpl {
 
     private final DeckRepository deckRepository;
     private final SubjectRepository subjectRepository;
+    private final CardRepository cardRepository;
 
     public List<DeckResponse> getUserDecks(UUID userId) {
         return deckRepository.findByUserIdOrderByUpdatedAtDesc(userId)
@@ -28,8 +33,28 @@ public class DeckServiceImpl {
     }
 
     public List<DeckResponse> getDecksBySubject(UUID subjectId, UUID userId) {
-        return deckRepository.findBySubject_IdAndUserIdOrderByUpdatedAtDesc(subjectId, userId)
-                .stream().map(DeckResponse::from).toList();
+        List<Deck> decks = deckRepository.findBySubject_IdAndUserIdOrderByUpdatedAtDesc(subjectId, userId);
+        if (decks.isEmpty()) return List.of();
+
+        List<UUID> deckIds = decks.stream().map(Deck::getId).toList();
+        LocalDate today = LocalDate.now();
+        // Map<deckId, [masteredCount, dueCount]>
+        Map<UUID, long[]> stats = cardRepository.findDeckStats(deckIds, today).stream()
+                .collect(Collectors.toMap(
+                        r -> (UUID) r[0],
+                        r -> new long[]{toLong(r[2]), toLong(r[3])}
+                ));
+        return decks.stream().map(deck -> {
+            long[] s = stats.getOrDefault(deck.getId(), new long[]{0L, 0L});
+            return DeckResponse.from(deck, (int) s[1], (int) s[0]);
+        }).toList();
+    }
+
+    private static long toLong(Object val) {
+        if (val == null) return 0L;
+        if (val instanceof Long l) return l;
+        if (val instanceof Number n) return n.longValue();
+        return 0L;
     }
 
     @Transactional

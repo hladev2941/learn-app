@@ -32,6 +32,11 @@ export interface CreateCardRequest {
   tags?: string[];
 }
 
+export interface GeneratedCard {
+  front: string;
+  back: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class DeckService {
   private http = inject(HttpClient);
@@ -114,5 +119,14 @@ export class DeckService {
 
   deleteCard(deckId: string, cardId: string) {
     return this.http.delete<void>(`${this.base}/decks/${deckId}/cards/${cardId}`);
+  }
+
+  // ─── AI Generation ───
+  generateCards(text: string, deckId: string, maxCards: number) {
+    return this.http.post<ApiResponse<GeneratedCard[]>>(`${this.base}/ai/generate-cards`, {
+      text,
+      deckId,
+      maxCards,
+    });
   }
 }

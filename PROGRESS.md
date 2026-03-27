@@ -1,6 +1,6 @@
 # LearnApp — Ghi chú tiến độ
 
-> Cập nhật lần cuối: 2026-03-26 (session 6)
+> Cập nhật lần cuối: 2026-03-27 (session 7)
 
 ---
 
@@ -17,6 +17,7 @@
 | Card — Rich Text Formatting | ✅ Toolbar B/I/U/S + font size + màu chữ + màu nền |
 | Card — Nguồn tài liệu | ✅ Trường `source` + badge hiển thị trong card list |
 | Card — HTML Content | ✅ Backend `contentFormat` field + Frontend `DomSanitizer` render |
+| Card — List Display | ✅ HTML render `[innerHTML]`, Q badge, left accent border theo state, entrance animation |
 | Review — HTML Render | ✅ Safe HTML via `DomSanitizer.bypassSecurityTrustHtml()` |
 | Card Modal | ✅ Modal rộng 640px, max 90vh, editor cuộn được |
 | Notification per Subject | ✅ Config lưu DB, scheduler Phase 2 |
@@ -200,6 +201,7 @@ docker compose up -d
 - [x] **Card editor** — rich text toolbar (B/I/U/S/fontSize/color/highlight) ✅
 - [x] **Card modal** — rộng 640px, max 90vh, editor cuộn được ✅
 - [x] **Card source field** — input + badge hiển thị trong list ✅
+- [x] **Card list display** — `[innerHTML]` render HTML, Q badge, left accent border theo FSRS state, `@keyframes cardIn` entrance animation, `stripHtml()` cho preview ✅
 - [x] **Review page** — HTML safe render via DomSanitizer ✅
 - [ ] **Review page** — flip card UI hoàn chỉnh với rich text
 - [ ] **Timer page** — Pomodoro timer (25/5 phút), tích hợp study session

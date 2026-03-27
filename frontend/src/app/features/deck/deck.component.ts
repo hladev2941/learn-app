@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RouterLink } from '@angular/router';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Card, Deck, Subject } from '../../core/models/deck.model';
 import { CreateCardRequest, CreateDeckRequest, CreateSubjectRequest, DeckService, GeneratedCard } from './deck.service';
 
@@ -301,20 +302,48 @@ const S = `
 
 .card-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 
+/* Entrance animation for new cards */
+@keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
 /* Flash card item */
 .flash-card {
-  background: rgba(248,250,252,.85); border: 1px solid rgba(199,210,254,.5);
+  background: white; border: 1px solid rgba(199,210,254,.55);
+  border-left: 3px solid #6366f1;
   border-radius: 14px; overflow: hidden;
-  transition: box-shadow .15s;
+  transition: box-shadow .2s, transform .2s, border-left-color .2s;
+  animation: cardIn .22s ease both;
 }
-.flash-card:hover { box-shadow: 0 3px 14px rgba(99,102,241,.1); }
+.flash-card:hover {
+  box-shadow: 0 4px 18px rgba(99,102,241,.13);
+  transform: translateY(-1px);
+}
+.flash-card:has(.state-learning) { border-left-color: #f59e0b; }
+.flash-card:has(.state-review)   { border-left-color: #10b981; }
+.flash-card:has(.state-relearn)  { border-left-color: #ef4444; }
 .flash-card-header {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 12px 14px; cursor: pointer;
 }
+
+/* Q badge */
+.flash-q-badge {
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 7px; margin-top: 1px;
+  background: rgba(99,102,241,.1); color: #6366f1;
+  font-size: .625rem; font-weight: 800; letter-spacing: .02em;
+}
+
 .flash-content { flex: 1; min-width: 0; }
-.flash-front { font-size: .8125rem; font-weight: 600; color: #1e1b4b; margin-bottom: 3px; }
-.flash-back-preview { font-size: .75rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flash-front {
+  font-size: .8125rem; font-weight: 600; color: #1e1b4b; margin-bottom: 4px;
+  line-height: 1.5;
+}
+/* Ensure inline HTML in front/back renders neatly */
+.flash-front p, .flash-front span { margin: 0; }
+.flash-back-preview {
+  font-size: .75rem; color: #94a3b8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .flash-tags  { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
 .tag-pill { font-size: .6875rem; font-weight: 600; color: #6366f1; background: rgba(99,102,241,.1); border-radius: 100px; padding: 1px 7px; }
 .flash-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
@@ -322,12 +351,19 @@ const S = `
 
 /* Expanded card back */
 .flash-back-full {
-  border-top: 1px solid rgba(199,210,254,.4);
-  padding: 10px 14px 12px;
-  background: rgba(241,245,249,.5);
-  font-size: .8125rem; color: #475569; line-height: 1.5;
+  border-top: 1px solid rgba(199,210,254,.35);
+  padding: 10px 14px 13px 46px;
+  background: linear-gradient(135deg, rgba(248,250,252,.7), rgba(241,245,249,.7));
 }
-.back-label { font-size: .7rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+.back-label {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .65rem; font-weight: 800; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px;
+}
+.flash-back-html {
+  font-size: .8125rem; color: #374151; line-height: 1.65;
+}
+.flash-back-html p { margin: 0; }
 
 /* Next review badge */
 .review-date-badge {
@@ -904,10 +940,11 @@ const S = `
                   @for (card of filteredCards(); track card.id) {
                     <div class="flash-card">
                       <div class="flash-card-header" (click)="toggleCardExpand(card.id)">
+                        <div class="flash-q-badge">Q</div>
                         <div class="flash-content">
-                          <div class="flash-front">{{ card.frontText }}</div>
+                          <div class="flash-front" [innerHTML]="safeHtml(card.frontText)"></div>
                           @if (expandedCardId() !== card.id) {
-                            <div class="flash-back-preview">{{ card.backText }}</div>
+                            <div class="flash-back-preview">{{ stripHtml(card.backText) }}</div>
                           }
                           @if (card.source) {
                             <div class="card-source">
@@ -933,7 +970,7 @@ const S = `
                       @if (expandedCardId() === card.id) {
                         <div class="flash-back-full">
                           <div class="back-label">Mặt sau</div>
-                          {{ card.backText }}
+                          <div class="flash-back-html" [innerHTML]="safeHtml(card.backText)"></div>
                         </div>
                       }
                     </div>
@@ -1253,6 +1290,16 @@ const S = `
 })
 export class DeckComponent implements OnInit {
   protected svc = inject(DeckService);
+  private sanitizer = inject(DomSanitizer);
+
+  safeHtml(html: string): SafeHtml {
+    return this.sanitizer.bypassSecurityTrustHtml(html ?? '');
+  }
+
+  stripHtml(html: string): string {
+    if (!html) return '';
+    return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+  }
 
   view            = signal<'subjects' | 'decks'>('subjects');
   selectedSubject = signal<Subject | null>(null);
